@@ -16,6 +16,12 @@ default_skip :: proc(c: u8) -> bool {
 
 // combinators /////////////////////////////////////////////////////////////////
 
+// TODO: handle errors properly, the easiest way might be to extract logic into
+//       extern function and test for the result (it will also make the code
+//       more readable, convetion should be combinator_rule_parse +
+//       combinator_rule functions, and the lambda print error messge if
+//       required).
+
 cond :: proc(
     pred: PredProc,
     skip: PredProc = default_skip,
@@ -138,6 +144,9 @@ star :: proc(
     }
 }
 
+// TODO: plus (one or more)
+// TODO: times (apply the parer a certain amount of time)
+
 seq :: proc(
     parsers: ..Parser,
     skip: PredProc = default_skip,
@@ -170,3 +179,11 @@ seq :: proc(
         }
     }
 }
+
+// TODO: or (the or should be greedy an try to parse the longuest string. Later,
+// we could have an expect or validate rule that allow to optimize this (branch
+// rule?))
+
+// TODO: opt (optional rule)
+
+// TODO: rec, right_rec, left_rec
