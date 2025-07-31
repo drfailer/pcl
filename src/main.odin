@@ -23,10 +23,11 @@ parse_digits :: proc() -> parodin.Parser {
 }
 
 create_int :: proc(content: string, user_data: rawptr) -> rawptr {
-    fmt.println("create int")
+    fmt.printfln("create int -> \"{}\"", content)
     node := new(Node)
     node.name = "int"
     node.data = strconv.atoi(content)
+    fmt.printfln("create int, data = {}", node.data)
     return node
 }
 
@@ -47,7 +48,7 @@ create_float :: proc(content: string, user_data: rawptr) -> rawptr {
 parse_float :: proc() -> parodin.Parser {
     fmt.println("parse float")
     using parodin
-    return seq(parse_digits(), lit_c('.'), parse_digits(), exec = create_float)
+    return seq(parse_digits(), lit_c('.'), opt(parse_digits()), exec = create_float)
 }
 
 parse_number :: proc() -> parodin.Parser {
@@ -65,7 +66,7 @@ test_parser :: proc(name: string, parser: parodin.Parser, str: string,) {
     state, ok := parodin.parse_string(parser, str)
     defer free(state.user_data)
 
-    fmt.printf("{} parser result for input \"{}\":\n", name, str)
+    fmt.printf("\n{} parser result for input \"{}\":\n", name, str)
     fmt.printf("  ok = {}\n", ok)
     fmt.printf("  state = {}\n", state)
     fmt.printf("  user_data = {}\n", (cast(^Node)state.user_data)^)
@@ -76,10 +77,11 @@ main :: proc() {
     int_parser := parse_int()
     number_parser := parse_number()
 
-    test_parser("int", int_parser, "12345")
-    test_parser("int", int_parser, "12345.4638")
-    test_parser("float", float_parser, "12345.4638")
-    test_parser("float", float_parser, "12345")
-    test_parser("number", number_parser, "12345")
-    test_parser("number", number_parser, "12345.4638")
+    test_parser("int", int_parser, "1234567890")
+    test_parser("int", int_parser, "1234567890.1234567890")
+    test_parser("float", float_parser, "1234567890.1234567890")
+    test_parser("float", float_parser, "1234567890")
+    test_parser("number", number_parser, "1234567890")
+    test_parser("number", number_parser, "1234567890.1234567890")
+    test_parser("number", number_parser, "1234567890.")
 }

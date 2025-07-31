@@ -124,9 +124,11 @@ single :: proc(
             ctx: CombinatorParserContext,
         ) -> (new_state: ParserState, ok: bool) {
             new_state = parser_skip(state, ctx.skip)
-            if new_state, ok = parser_parse(new_state, ctx.parsers[0]); !ok {
+            sub_state := new_state
+            if sub_state, ok = parser_parse(sub_state, ctx.parsers[0]); !ok {
                 return state, false
             }
+            new_state.cur = sub_state.cur
             parser_exec(&new_state, ctx.exec)
             state_save_pos(&new_state)
             return new_state, true
@@ -323,6 +325,35 @@ or :: proc(
     }
 }
 
-// TODO: opt (optional rule)
+opt :: proc(
+    parser: Parser,
+    skip: PredProc = default_skip,
+    exec: ExecProc = default_exec,
+) -> Parser {
+    parsers := make([dynamic]Parser, 1) // TODO: mem leak
+    parsers[0] = parser
+
+    return CombinatorParser {
+        parse = proc(
+            state: ParserState,
+            ctx: CombinatorParserContext,
+        ) -> (new_state: ParserState, ok: bool) {
+            new_state = parser_skip(state, ctx.skip)
+            sub_state := new_state
+            if sub_state, ok = parser_parse(sub_state, ctx.parsers[0]); !ok {
+                return state, true
+            }
+            new_state.cur = sub_state.cur
+            parser_exec(&new_state, ctx.exec)
+            state_save_pos(&new_state)
+            return new_state, true
+        },
+        ctx = CombinatorParserContext {
+            skip = skip,
+            exec = exec,
+            parsers = parsers,
+        }
+    }
+}
 
 // TODO: rec, right_rec, left_rec
