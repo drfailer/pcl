@@ -110,6 +110,35 @@ range :: proc(
     }, skip, exec)
 }
 
+single :: proc(
+    parser: Parser,
+    skip: PredProc = default_skip,
+    exec: ExecProc = default_exec,
+) -> Parser {
+    parsers := make([dynamic]Parser, 1) // TODO: mem leak
+    parsers[0] = parser
+
+    return CombinatorParser {
+        parse = proc(
+            state: ParserState,
+            ctx: CombinatorParserContext,
+        ) -> (new_state: ParserState, ok: bool) {
+            new_state = parser_skip(state, ctx.skip)
+            if new_state, ok = parser_parse(new_state, ctx.parsers[0]); !ok {
+                return state, false
+            }
+            parser_exec(&new_state, ctx.exec)
+            state_save_pos(&new_state)
+            return new_state, true
+        },
+        ctx = CombinatorParserContext {
+            skip = skip,
+            exec = exec,
+            parsers = parsers,
+        }
+    }
+}
+
 star :: proc(
     parser: Parser,
     skip: PredProc = default_skip,
@@ -144,8 +173,78 @@ star :: proc(
     }
 }
 
-// TODO: plus (one or more)
-// TODO: times (apply the parer a certain amount of time)
+plus :: proc(
+    parser: Parser,
+    skip: PredProc = default_skip,
+    exec: ExecProc = default_exec,
+) -> Parser {
+    parsers := make([dynamic]Parser, 1) // TODO: mem leak
+    parsers[0] = parser
+
+    return CombinatorParser {
+        parse = proc(
+            state: ParserState,
+            ctx: CombinatorParserContext,
+        ) -> (new_state: ParserState, ok: bool) {
+            new_state = parser_skip(state, ctx.skip)
+            sub_state := new_state
+            for !state_eof(new_state) {
+                sub_state = parser_parse(sub_state, ctx.parsers[0]) or_break
+                new_state.cur = sub_state.cur
+            }
+            if new_state.cur > new_state.pos {
+                parser_exec(&new_state, ctx.exec)
+                state_save_pos(&new_state)
+                return new_state, true
+            }
+            return state, false
+        },
+        ctx = CombinatorParserContext {
+            skip = skip,
+            exec = exec,
+            parsers = parsers,
+        }
+    }
+}
+
+times :: proc(
+    $nb_times: int,
+    parser: Parser,
+    skip: PredProc = default_skip,
+    exec: ExecProc = default_exec,
+) -> Parser {
+    parsers := make([dynamic]Parser, 1) // TODO: mem leak
+    parsers[0] = parser
+
+    return CombinatorParser {
+        parse = proc(
+            state: ParserState,
+            ctx: CombinatorParserContext,
+        ) -> (new_state: ParserState, ok: bool) {
+            count := 0
+            new_state = parser_skip(state, ctx.skip)
+            sub_state := new_state
+            for !state_eof(new_state) && count < nb_times {
+                sub_state = parser_parse(sub_state, ctx.parsers[0]) or_break
+                new_state.cur = sub_state.cur
+                count += 1
+            }
+            if count == nb_times {
+                parser_exec(&new_state, ctx.exec)
+                state_save_pos(&new_state)
+                return new_state, true
+            }
+            return state, false
+        },
+        ctx = CombinatorParserContext {
+            skip = skip,
+            exec = exec,
+            parsers = parsers,
+        }
+    }
+}
+
+// TODO: is a while needed
 
 seq :: proc(
     parsers: ..Parser,
@@ -165,7 +264,9 @@ seq :: proc(
             new_state = parser_skip(state, ctx.skip)
             sub_state := new_state
             for parser in ctx.parsers {
-                sub_state = parser_parse(sub_state, parser) or_return
+                if sub_state, ok = parser_parse(sub_state, parser); !ok {
+                    return state, false
+                }
                 new_state.cur = sub_state.cur
             }
             parser_exec(&new_state, ctx.exec)
@@ -180,9 +281,47 @@ seq :: proc(
     }
 }
 
-// TODO: or (the or should be greedy an try to parse the longuest string. Later,
-// we could have an expect or validate rule that allow to optimize this (branch
-// rule?))
+// TODO: we should have a rule that always try to parse the longuest string.
+// longuest string. Later, we could have an expect or validate rule that allow
+// to optimize this (branch rule?
+
+/*
+ * The or process rules in order, which means that the first rule in the list
+ * will be tested before the second. This parser is greedy and will return the
+ * first rule that can be applied on the input.
+ */
+or :: proc(
+    parsers: ..Parser,
+    skip: PredProc = default_skip,
+    exec: ExecProc = default_exec
+) -> Parser {
+    parsers_arr := make([dynamic]Parser, 0, len(parsers)) // TODO: mem leak
+
+    for parser in parsers {
+        append(&parsers_arr, parser)
+    }
+    return CombinatorParser {
+        parse = proc(
+            state: ParserState,
+            ctx: CombinatorParserContext
+        ) -> (new_state: ParserState, ok: bool) {
+            new_state = parser_skip(state, ctx.skip)
+            for parser in ctx.parsers {
+                if end_state, ok := parser_parse(new_state, parser); ok {
+                    parser_exec(&end_state, ctx.exec)
+                    state_save_pos(&end_state)
+                    return end_state, true
+                }
+            }
+            return state, false
+        },
+        ctx = CombinatorParserContext {
+            skip = skip,
+            exec = exec,
+            parsers = parsers_arr,
+        }
+    }
+}
 
 // TODO: opt (optional rule)
 

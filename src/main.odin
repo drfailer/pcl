@@ -16,14 +16,28 @@ Node :: struct {
     childs: [dynamic]Node,
 }
 
+parse_digits :: proc() -> parodin.Parser {
+    fmt.println("parse digits")
+    using parodin
+    return plus(range('0', '9'))
+}
+
 create_int :: proc(content: string, user_data: rawptr) -> rawptr {
+    fmt.println("create int")
     node := new(Node)
     node.name = "int"
     node.data = strconv.atoi(content)
     return node
 }
 
+parse_int :: proc() -> parodin.Parser {
+    fmt.println("parse int")
+    using parodin
+    return single(parse_digits(), exec = create_int)
+}
+
 create_float :: proc(content: string, user_data: rawptr) -> rawptr {
+    fmt.println("create float")
     node := new(Node)
     node.name = "float"
     node.data = strconv.atof(content)
@@ -31,10 +45,15 @@ create_float :: proc(content: string, user_data: rawptr) -> rawptr {
 }
 
 parse_float :: proc() -> parodin.Parser {
+    fmt.println("parse float")
     using parodin
-    parse_number := star(range('0', '9'))
-    parse_dot := lit_c('.')
-    return seq(parse_number, parse_dot, parse_number, exec = create_float)
+    return seq(parse_digits(), lit_c('.'), parse_digits(), exec = create_float)
+}
+
+parse_number :: proc() -> parodin.Parser {
+    fmt.println("parse number")
+    using parodin
+    return or(parse_float(), parse_int())
 }
 
 // TODO: add a name to the parser rules + use #caller_location.procedure as a
@@ -42,12 +61,25 @@ parse_float :: proc() -> parodin.Parser {
 //       the name of the rule
 // TODO: print the parser.
 
-main :: proc() {
-    parser := parse_float()
-
-    state, ok := parodin.parse_string(parser, "12345.4638")
+test_parser :: proc(name: string, parser: parodin.Parser, str: string,) {
+    state, ok := parodin.parse_string(parser, str)
     defer free(state.user_data)
-    fmt.printfln("ok = {}\n", ok)
-    fmt.printfln("state = {}\n", state)
-    fmt.printfln("user_data = {}\n", (cast(^Node)state.user_data)^)
+
+    fmt.printf("{} parser result for input \"{}\":\n", name, str)
+    fmt.printf("  ok = {}\n", ok)
+    fmt.printf("  state = {}\n", state)
+    fmt.printf("  user_data = {}\n", (cast(^Node)state.user_data)^)
+}
+
+main :: proc() {
+    float_parser := parse_float()
+    int_parser := parse_int()
+    number_parser := parse_number()
+
+    test_parser("int", int_parser, "12345")
+    test_parser("int", int_parser, "12345.4638")
+    test_parser("float", float_parser, "12345.4638")
+    test_parser("float", float_parser, "12345")
+    test_parser("number", number_parser, "12345")
+    test_parser("number", number_parser, "12345.4638")
 }
