@@ -8,22 +8,59 @@ ExecProc :: proc(content: string, user_data: rawptr) -> rawptr
 
 PredProc :: proc(c: u8) -> bool
 
-ParserContext :: struct {
+ParseProc :: proc(self: ^Parser, state: ParserState) -> (new_state: ParserState, ok: bool)
+
+Parser :: struct {
     rc: u32,
     name: string,
+    parse: ParseProc,
     skip: PredProc,
     exec: ExecProc,
     pred: PredProc,
-    parsers: [dynamic]Parser, // TODO: use a pointer
+    parsers: [dynamic]^Parser,
 }
 
-Parser :: struct {
-    parse: proc(state: ParserState, ctx: ParserContext) -> (new_state: ParserState, ok: bool),
-    ctx: ParserContext,
+parser_create :: proc(
+    name: string,
+    parse: ParseProc,
+    skip: PredProc,
+    exec: ExecProc,
+    pred: PredProc = nil,
+    parsers: []^Parser = nil,
+) -> ^Parser {
+    parser := new(Parser)
+    parser.rc = 0
+    parser.name = name
+    parser.parse = parse
+    parser.skip = skip
+    parser.exec = exec
+    parser.pred = pred
+
+    if parsers != nil && len(parsers) > 0 {
+        parser.parsers = make([dynamic]^Parser, len(parsers))
+
+        for sub_parser, idx in parsers {
+            sub_parser.rc += 1
+            parser.parsers[idx] = sub_parser
+        }
+    }
+    return parser
 }
 
-parser_parse :: proc(state: ParserState, parser: Parser) -> (new_state: ParserState, ok: bool) {
-    return parser.parse(state, parser.ctx)
+parser_destroy :: proc(parser: ^Parser) {
+    if parser.parsers != nil && len(parser.parsers) > 0 {
+        for sub_parser in parser.parsers {
+            sub_parser.rc -= 1
+            if sub_parser.rc == 0 {
+                parser_destroy(sub_parser)
+            }
+        }
+    }
+    free(parser)
+}
+
+parser_parse :: proc(state: ParserState, parser: ^Parser) -> (new_state: ParserState, ok: bool) {
+    return parser->parse(state)
 }
 
 parser_skip_from_proc :: proc(state: ParserState, parser_skip: PredProc) -> ParserState {
@@ -37,7 +74,7 @@ parser_skip_from_proc :: proc(state: ParserState, parser_skip: PredProc) -> Pars
 }
 
 parser_skip_from_parser :: proc(state: ParserState, parser: Parser) -> ParserState {
-    return parser_skip_from_proc(state, parser.ctx.skip)
+    return parser_skip_from_proc(state, parser.skip)
 }
 
 parser_skip :: proc {
@@ -50,7 +87,7 @@ parser_exec_from_proc :: proc(state: ^ParserState, parser_exec: ExecProc) {
 }
 
 parser_exec_from_parser :: proc(state: ^ParserState, parser: Parser) {
-    parser_exec_from_proc(state, parser.ctx.exec)
+    parser_exec_from_proc(state, parser.exec)
 }
 
 parser_exec :: proc {
@@ -61,7 +98,7 @@ parser_exec :: proc {
 // parse api ///////////////////////////////////////////////////////////////////
 
 parse_string :: proc(
-    parser: Parser,
+    parser: ^Parser,
     str: string,
     user_data: rawptr = nil,
 ) -> (new_state: ParserState, ok: bool) {

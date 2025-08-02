@@ -16,7 +16,7 @@ Node :: struct {
     childs: [dynamic]Node,
 }
 
-parse_digits :: proc() -> parodin.Parser {
+parse_digits :: proc() -> ^parodin.Parser {
     fmt.println("parse digits")
     using parodin
     return plus(range('0', '9'))
@@ -31,7 +31,7 @@ create_int :: proc(content: string, user_data: rawptr) -> rawptr {
     return node
 }
 
-parse_int :: proc() -> parodin.Parser {
+parse_int :: proc() -> ^parodin.Parser {
     fmt.println("parse int")
     using parodin
     return single(parse_digits(), exec = create_int)
@@ -45,24 +45,21 @@ create_float :: proc(content: string, user_data: rawptr) -> rawptr {
     return node
 }
 
-parse_float :: proc() -> parodin.Parser {
+parse_float :: proc() -> ^parodin.Parser {
     fmt.println("parse float")
     using parodin
     return seq(parse_digits(), lit_c('.'), opt(parse_digits()), exec = create_float)
 }
 
-parse_number :: proc() -> parodin.Parser {
+parse_number :: proc() -> ^parodin.Parser {
     fmt.println("parse number")
     using parodin
     return or(parse_float(), parse_int())
 }
 
-// TODO: add a name to the parser rules + use #caller_location.procedure as a
-//       default value. -> we could have a rule struct that holds a parser and
-//       the name of the rule
 // TODO: print the parser.
 
-test_parser :: proc(name: string, parser: parodin.Parser, str: string,) {
+test_parser :: proc(name: string, parser: ^parodin.Parser, str: string,) {
     state, ok := parodin.parse_string(parser, str)
     defer free(state.user_data)
 
@@ -74,8 +71,11 @@ test_parser :: proc(name: string, parser: parodin.Parser, str: string,) {
 
 main :: proc() {
     float_parser := parse_float()
+    defer parodin.parser_destroy(float_parser)
     int_parser := parse_int()
+    defer parodin.parser_destroy(int_parser)
     number_parser := parse_number()
+    defer parodin.parser_destroy(number_parser)
 
     test_parser("int", int_parser, "1234567890")
     test_parser("int", int_parser, "1234567890.1234567890")
