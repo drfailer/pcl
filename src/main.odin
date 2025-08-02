@@ -2,6 +2,7 @@ package main
 
 import "core:fmt"
 import "core:strconv"
+import "core:log"
 import "parodin"
 
 // TODO: move into a different file
@@ -46,6 +47,7 @@ create_float :: proc(content: string, user_data: rawptr) -> rawptr {
 parse_float :: proc() -> ^parodin.Parser {
     using parodin
     return seq(parse_digits(), lit_c('.'), opt(parse_digits()), exec = create_float)
+    // return seq(parse_digits(), lit("."), opt(parse_digits()), exec = create_float)
 }
 
 parse_number :: proc() -> ^parodin.Parser {
@@ -66,6 +68,8 @@ test_parser :: proc(name: string, parser: ^parodin.Parser, str: string,) {
 }
 
 main :: proc() {
+    context.logger = log.create_console_logger()
+
     float_parser := parse_float()
     defer parodin.parser_destroy(float_parser)
     int_parser := parse_int()

@@ -6,7 +6,7 @@ import "core:strings"
 
 ExecProc :: proc(content: string, user_data: rawptr) -> rawptr
 
-PredProc :: proc(c: u8) -> bool
+PredProc :: proc(c: rune) -> bool
 
 ParseProc :: proc(self: ^Parser, state: ParserState) -> (new_state: ParserState, ok: bool)
 
@@ -82,7 +82,7 @@ parser_skip :: proc {
 }
 
 parser_exec_from_proc :: proc(state: ^ParserState, parser_exec: ExecProc) {
-    state.user_data = parser_exec(state.content[state.pos:state.cur], state.user_data)
+    state.user_data = parser_exec(state_string(state^), state.user_data)
 }
 
 parser_exec_from_parser :: proc(state: ^ParserState, parser: Parser) {

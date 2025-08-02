@@ -1,5 +1,7 @@
 package parodin
 
+import "core:fmt"
+
 // default parser functions ////////////////////////////////////////////////////
 
 default_parse :: proc(self: ^Parser, state: ParserState) -> (new_state: ParserState, ok: bool) {
@@ -10,7 +12,7 @@ default_exec :: proc(content: string, user_data: rawptr) -> rawptr {
     return user_data
 }
 
-default_skip :: proc(c: u8) -> bool {
+default_skip :: proc(c: rune) -> bool {
     return false
 }
 
@@ -50,30 +52,30 @@ one_of :: proc(
     exec: ExecProc = default_exec,
     name: string = "",
 ) -> ^Parser {
-    return cond(proc(c: u8) -> bool {
+    return cond(proc(c: rune) -> bool {
         return strings.contains_rune(chars, rune(c))
     }, skip, exec, name)
 }
 
 range :: proc(
-    $c1: u8,
-    $c2: u8,
+    $c1: rune,
+    $c2: rune,
     skip: PredProc = default_skip,
     exec: ExecProc = default_exec,
     name: string = "",
 ) -> ^Parser {
-    return cond(proc(c: u8) -> bool {
+    return cond(proc(c: rune) -> bool {
         return c1 <= c && c <= c2
     }, skip, exec, name)
 }
 
 lit_c :: proc(
-    $char: u8,
+    $char: rune,
     skip: PredProc = default_skip,
     exec: ExecProc = default_exec,
     name: string = "",
 ) -> ^Parser {
-    return cond(proc(c: u8) -> bool {
+    return cond(proc(c: rune) -> bool {
         return c == char
     }, skip, exec, name)
 }
@@ -85,12 +87,18 @@ lit :: proc(
     name: string = "",
 ) -> ^Parser {
     parse := proc(self: ^Parser, state: ParserState) -> (new_state: ParserState, ok: bool) {
-        new_state = parser_skip(state, self.skip)
+        // TODO: clean up this function
+        new_state = state
+        sub_state := parser_skip(state, self.skip)
         for c in str {
-            if state_eof(new_state) || state_char(new_state) != c {
+            if state_eof(sub_state) || state_char(sub_state) != c {
+                // fmt.printfln("error: expected literal '{}'", str)
+                // state_print_context(new_state)
                 return state, false
             }
+            sub_state = state_eat_one(sub_state) or_return
         }
+        new_state = sub_state
         parser_exec(&new_state, self.exec)
         state_save_pos(&new_state)
         return new_state, true
