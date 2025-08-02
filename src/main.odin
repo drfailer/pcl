@@ -4,6 +4,9 @@ import "core:fmt"
 import "core:strconv"
 import "parodin"
 
+// TODO: move into a different file
+import "core:testing"
+
 NodeData :: union {
     int,
     f64,
@@ -17,28 +20,23 @@ Node :: struct {
 }
 
 parse_digits :: proc() -> ^parodin.Parser {
-    fmt.println("parse digits")
     using parodin
     return plus(range('0', '9'))
 }
 
 create_int :: proc(content: string, user_data: rawptr) -> rawptr {
-    fmt.printfln("create int -> \"{}\"", content)
     node := new(Node)
     node.name = "int"
     node.data = strconv.atoi(content)
-    fmt.printfln("create int, data = {}", node.data)
     return node
 }
 
 parse_int :: proc() -> ^parodin.Parser {
-    fmt.println("parse int")
     using parodin
     return single(parse_digits(), exec = create_int)
 }
 
 create_float :: proc(content: string, user_data: rawptr) -> rawptr {
-    fmt.println("create float")
     node := new(Node)
     node.name = "float"
     node.data = strconv.atof(content)
@@ -46,13 +44,11 @@ create_float :: proc(content: string, user_data: rawptr) -> rawptr {
 }
 
 parse_float :: proc() -> ^parodin.Parser {
-    fmt.println("parse float")
     using parodin
     return seq(parse_digits(), lit_c('.'), opt(parse_digits()), exec = create_float)
 }
 
 parse_number :: proc() -> ^parodin.Parser {
-    fmt.println("parse number")
     using parodin
     return or(parse_float(), parse_int())
 }
@@ -84,4 +80,50 @@ main :: proc() {
     test_parser("number", number_parser, "1234567890")
     test_parser("number", number_parser, "1234567890.1234567890")
     test_parser("number", number_parser, "1234567890.")
+}
+
+
+@(test)
+test_parse_number_int :: proc(t: ^testing.T) {
+    node: ^Node
+    parser := parse_number()
+    defer parodin.parser_destroy(parser)
+
+    state, ok := parodin.parse_string(parser, "1234567890")
+    defer free(state.user_data)
+    testing.expect(t, ok)
+    testing.expect(t, state.user_data != nil)
+    node = cast(^Node)state.user_data
+    testing.expect(t, node.name == "int")
+    testing.expect(t, node.data == 1234567890)
+}
+
+@(test)
+test_parse_number_float1 :: proc(t: ^testing.T) {
+    node: ^Node
+    parser := parse_number()
+    defer parodin.parser_destroy(parser)
+
+    state, ok := parodin.parse_string(parser, "1234567890.1234567890")
+    defer free(state.user_data)
+    testing.expect(t, ok)
+    testing.expect(t, state.user_data != nil)
+    node = cast(^Node)state.user_data
+    testing.expect(t, node.name == "float")
+    testing.expect(t, node.data == 1234567890.1234567890)
+}
+
+@(test)
+test_parse_number_float2 :: proc(t: ^testing.T) {
+    node: ^Node
+    parser := parse_number()
+    defer parodin.parser_destroy(parser)
+
+    state, ok := parodin.parse_string(parser, "1234567890.")
+    defer free(state.user_data)
+    testing.expect(t, ok)
+    testing.expect(t, state.user_data != nil)
+    node = cast(^Node)state.user_data
+    testing.expect(t, node.name == "float")
+    testing.expect(t, node.data == 1234567890.0)
 }

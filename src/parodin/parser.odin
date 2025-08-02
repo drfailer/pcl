@@ -56,6 +56,7 @@ parser_destroy :: proc(parser: ^Parser) {
             }
         }
     }
+    delete(parser.parsers)
     free(parser)
 }
 
