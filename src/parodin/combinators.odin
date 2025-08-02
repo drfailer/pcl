@@ -26,11 +26,12 @@ cond :: proc(
     pred: PredProc,
     skip: PredProc = default_skip,
     exec: ExecProc = default_exec,
+    name: string = "",
 ) -> Parser {
-    return PredParser {
+    return Parser {
         parse = proc(
             state: ParserState,
-            ctx: PredParserContext
+            ctx: ParserContext,
         ) -> (new_state: ParserState, ok: bool) {
             if state_eof(state) do return state, false
 
@@ -44,7 +45,8 @@ cond :: proc(
             }
             return state, false
         },
-        ctx = PredParserContext {
+        ctx = ParserContext {
+            name = name,
             skip = skip,
             exec = exec,
             pred = pred,
@@ -52,25 +54,50 @@ cond :: proc(
     }
 }
 
+one_of :: proc(
+    $chars: string,
+    skip: PredProc = default_skip,
+    exec: ExecProc = default_exec,
+    name: string = "",
+) -> Parser {
+    return cond(proc(c: u8) -> bool {
+        return strings.contains_rune(chars, rune(c))
+    }, skip, exec, name)
+}
+
+range :: proc(
+    $c1: u8,
+    $c2: u8,
+    skip: PredProc = default_skip,
+    exec: ExecProc = default_exec,
+    name: string = "",
+) -> Parser {
+    return cond(proc(c: u8) -> bool {
+        return c1 <= c && c <= c2
+    }, skip, exec, name)
+}
+
 lit_c :: proc(
     $char: u8,
     skip: PredProc = default_skip,
     exec: ExecProc = default_exec,
+    name: string = "",
 ) -> Parser {
     return cond(proc(c: u8) -> bool {
         return c == char
-    }, skip, exec)
+    }, skip, exec, name)
 }
 
 lit :: proc(
     $str: string,
     skip: PredProc = default_skip,
     exec: ExecProc = default_exec,
+    name: string = "",
 ) -> Parser {
-    return BasicParser {
+    return Parser {
         parse = proc(
             state: ParserState,
-            ctx: BasicParserContext,
+            ctx: ParserContext,
         ) -> (new_state: ParserState, ok: bool) {
             new_state = parser_skip(state, ctx.skip)
             for c in str {
@@ -82,46 +109,27 @@ lit :: proc(
             state_save_pos(&new_state)
             return new_state, true
         },
-        ctx = BasicParserContext {
+        ctx = ParserContext {
+            name = name,
             skip = skip,
             exec = exec,
         }
     }
 }
 
-one_of :: proc(
-    $chars: string,
-    skip: PredProc = default_skip,
-    exec: ExecProc = default_exec,
-) -> Parser {
-    return cond(proc(c: u8) -> bool {
-        return strings.contains_rune(chars, rune(c))
-    }, skip, exec)
-}
-
-range :: proc(
-    $c1: u8,
-    $c2: u8,
-    skip: PredProc = default_skip,
-    exec: ExecProc = default_exec,
-) -> Parser {
-    return cond(proc(c: u8) -> bool {
-        return c1 <= c && c <= c2
-    }, skip, exec)
-}
-
 single :: proc(
     parser: Parser,
     skip: PredProc = default_skip,
     exec: ExecProc = default_exec,
+    name: string = "",
 ) -> Parser {
     parsers := make([dynamic]Parser, 1) // TODO: mem leak
     parsers[0] = parser
 
-    return CombinatorParser {
+    return Parser {
         parse = proc(
             state: ParserState,
-            ctx: CombinatorParserContext,
+            ctx: ParserContext,
         ) -> (new_state: ParserState, ok: bool) {
             new_state = parser_skip(state, ctx.skip)
             sub_state := new_state
@@ -133,7 +141,8 @@ single :: proc(
             state_save_pos(&new_state)
             return new_state, true
         },
-        ctx = CombinatorParserContext {
+        ctx = ParserContext {
+            name = name,
             skip = skip,
             exec = exec,
             parsers = parsers,
@@ -145,14 +154,15 @@ star :: proc(
     parser: Parser,
     skip: PredProc = default_skip,
     exec: ExecProc = default_exec,
+    name: string = "",
 ) -> Parser {
     parsers := make([dynamic]Parser, 1) // TODO: mem leak
     parsers[0] = parser
 
-    return CombinatorParser {
+    return Parser {
         parse = proc(
             state: ParserState,
-            ctx: CombinatorParserContext,
+            ctx: ParserContext,
         ) -> (new_state: ParserState, ok: bool) {
             new_state = parser_skip(state, ctx.skip)
             sub_state := new_state
@@ -167,7 +177,8 @@ star :: proc(
             }
             return state, true
         },
-        ctx = CombinatorParserContext {
+        ctx = ParserContext {
+            name = name,
             skip = skip,
             exec = exec,
             parsers = parsers,
@@ -179,14 +190,15 @@ plus :: proc(
     parser: Parser,
     skip: PredProc = default_skip,
     exec: ExecProc = default_exec,
+    name: string = "",
 ) -> Parser {
     parsers := make([dynamic]Parser, 1) // TODO: mem leak
     parsers[0] = parser
 
-    return CombinatorParser {
+    return Parser {
         parse = proc(
             state: ParserState,
-            ctx: CombinatorParserContext,
+            ctx: ParserContext,
         ) -> (new_state: ParserState, ok: bool) {
             new_state = parser_skip(state, ctx.skip)
             sub_state := new_state
@@ -201,7 +213,8 @@ plus :: proc(
             }
             return state, false
         },
-        ctx = CombinatorParserContext {
+        ctx = ParserContext {
+            name = name,
             skip = skip,
             exec = exec,
             parsers = parsers,
@@ -214,14 +227,15 @@ times :: proc(
     parser: Parser,
     skip: PredProc = default_skip,
     exec: ExecProc = default_exec,
+    name: string = "",
 ) -> Parser {
     parsers := make([dynamic]Parser, 1) // TODO: mem leak
     parsers[0] = parser
 
-    return CombinatorParser {
+    return Parser {
         parse = proc(
             state: ParserState,
-            ctx: CombinatorParserContext,
+            ctx: ParserContext,
         ) -> (new_state: ParserState, ok: bool) {
             count := 0
             new_state = parser_skip(state, ctx.skip)
@@ -238,7 +252,8 @@ times :: proc(
             }
             return state, false
         },
-        ctx = CombinatorParserContext {
+        ctx = ParserContext {
+            name = name,
             skip = skip,
             exec = exec,
             parsers = parsers,
@@ -251,17 +266,18 @@ times :: proc(
 seq :: proc(
     parsers: ..Parser,
     skip: PredProc = default_skip,
-    exec: ExecProc = default_exec
+    exec: ExecProc = default_exec,
+    name: string = "",
 ) -> Parser {
     parsers_arr := make([dynamic]Parser, 0, len(parsers)) // TODO: mem leak
 
     for parser in parsers {
         append(&parsers_arr, parser)
     }
-    return CombinatorParser {
+    return Parser {
         parse = proc(
             state: ParserState,
-            ctx: CombinatorParserContext
+            ctx: ParserContext
         ) -> (new_state: ParserState, ok: bool) {
             new_state = parser_skip(state, ctx.skip)
             sub_state := new_state
@@ -275,7 +291,8 @@ seq :: proc(
             state_save_pos(&new_state)
             return new_state, true
         },
-        ctx = CombinatorParserContext {
+        ctx = ParserContext {
+            name = name,
             skip = skip,
             exec = exec,
             parsers = parsers_arr,
@@ -295,17 +312,18 @@ seq :: proc(
 or :: proc(
     parsers: ..Parser,
     skip: PredProc = default_skip,
-    exec: ExecProc = default_exec
+    exec: ExecProc = default_exec,
+    name: string = "",
 ) -> Parser {
     parsers_arr := make([dynamic]Parser, 0, len(parsers)) // TODO: mem leak
 
     for parser in parsers {
         append(&parsers_arr, parser)
     }
-    return CombinatorParser {
+    return Parser {
         parse = proc(
             state: ParserState,
-            ctx: CombinatorParserContext
+            ctx: ParserContext
         ) -> (new_state: ParserState, ok: bool) {
             new_state = parser_skip(state, ctx.skip)
             for parser in ctx.parsers {
@@ -317,7 +335,8 @@ or :: proc(
             }
             return state, false
         },
-        ctx = CombinatorParserContext {
+        ctx = ParserContext {
+            name = name,
             skip = skip,
             exec = exec,
             parsers = parsers_arr,
@@ -329,14 +348,15 @@ opt :: proc(
     parser: Parser,
     skip: PredProc = default_skip,
     exec: ExecProc = default_exec,
+    name: string = "",
 ) -> Parser {
     parsers := make([dynamic]Parser, 1) // TODO: mem leak
     parsers[0] = parser
 
-    return CombinatorParser {
+    return Parser {
         parse = proc(
             state: ParserState,
-            ctx: CombinatorParserContext,
+            ctx: ParserContext,
         ) -> (new_state: ParserState, ok: bool) {
             new_state = parser_skip(state, ctx.skip)
             sub_state := new_state
@@ -348,7 +368,8 @@ opt :: proc(
             state_save_pos(&new_state)
             return new_state, true
         },
-        ctx = CombinatorParserContext {
+        ctx = ParserContext {
+            name = name,
             skip = skip,
             exec = exec,
             parsers = parsers,
