@@ -67,9 +67,7 @@ parser_parse :: proc(state: ParserState, parser: ^Parser) -> (new_state: ParserS
 parser_skip_from_proc :: proc(state: ParserState, parser_skip: PredProc) -> ParserState {
     state := state
     for state.cur < len(state.content) && parser_skip(state_char(state)) {
-        // TODO: use a function in state that will properly do the update (will be useful to count lines, ...)
-        state.cur += 1
-        state.pos += 1
+        state = state_advance(state) or_break
     }
     return state
 }
@@ -104,5 +102,11 @@ parse_string :: proc(
     user_data: rawptr = nil,
 ) -> (new_state: ParserState, ok: bool) {
     str := str
-    return parser_parse(ParserState{&str, 0, 0, user_data}, parser)
+    return parser_parse(ParserState{
+        content = &str,
+        pos = 0,
+        cur = 0,
+        loc = Location{1, 1, ""},
+        user_data = user_data
+    }, parser)
 }
