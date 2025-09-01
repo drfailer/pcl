@@ -18,6 +18,7 @@ Parser :: struct {
     exec: ExecProc,
     pred: PredProc,
     parsers: [dynamic]^Parser,
+    report_error: bool, // tels if the parser should report an error. This value is determined automatically.
 }
 
 parser_create :: proc(
@@ -40,6 +41,7 @@ parser_create :: proc(
         parser.parsers = make([dynamic]^Parser, len(parsers))
 
         for sub_parser, idx in parsers {
+            if sub_parser == nil do continue
             sub_parser.rc += 1
             parser.parsers[idx] = sub_parser
         }

@@ -24,6 +24,39 @@ default_skip :: proc(c: rune) -> bool {
 //       combinator_rule functions, and the lambda print error messge if
 //       required).
 
+declare :: proc(
+    name: string = "",
+    skip: PredProc = default_skip,
+    exec: ExecProc = default_exec,
+) -> ^Parser {
+    parse := proc(self: ^Parser, state: ParserState) -> (new_state: ParserState, ok: bool) {
+        if len(self.parsers) == 0 || self.parsers[0] == nil {
+            fmt.printfln("error: unimplemented parser {}.", self.name)
+            return state, false
+        }
+        new_state = parser_skip(state, self.skip)
+        sub_state := new_state
+        if sub_state, ok = parser_parse(sub_state, self.parsers[0]); !ok {
+            return state, false
+        }
+        new_state.cur = sub_state.cur
+        parser_exec(&new_state, self.exec)
+        state_save_pos(&new_state)
+        return new_state, true
+    }
+    return parser_create(name, parse, skip, exec, parsers = []^Parser{nil})
+}
+
+define :: proc(parser: ^Parser, impl: ^Parser) {
+    if len(parser.parsers) == 0 {
+        fmt.printfln("error: cannot define parser {}.", parser.name)
+    }
+    if parser.parsers[0] != nil {
+        fmt.printfln("error: redifinition of parser {}.", parser.name)
+    }
+    parser.parsers[0] = impl
+}
+
 cond :: proc(
     pred: PredProc,
     skip: PredProc = default_skip,
@@ -207,9 +240,10 @@ seq :: proc(
     name: string = "",
 ) -> ^Parser {
     parse := proc(self: ^Parser, state: ParserState) -> (new_state: ParserState, ok: bool) {
-        new_state = parser_skip(state, self.skip)
+        new_state = state
         sub_state := new_state
         for parser in self.parsers {
+            sub_state = parser_skip(sub_state, self.skip)
             if sub_state, ok = parser_parse(sub_state, parser); !ok {
                 return state, false
             }
@@ -272,3 +306,14 @@ opt :: proc(
 }
 
 // TODO: rec, right_rec, left_rec
+
+lrec :: proc(
+    parser: ..^Parser,
+    skip: PredProc = default_skip,
+    exec: ExecProc = default_exec,
+    name: string = "",
+) -> ^Parser {
+    // TODO: apply left rules > apply rigtmost rule > loop until rightmost rule is not applicable
+    // TODO: the exec proc should be called in reverse order
+    return nil
+}
