@@ -35,6 +35,11 @@ default_skip :: proc(c: rune) -> bool {
 //       the top grammar)? -> if it is the case, it should not override skip
 //       functions specified for the sub-rules.
 
+// TODO: it may be better if the exec proc was taking a list of tokes as input.
+//       The tokens beeing either created by sub exec procs, or default
+//       generated (containing the content). This would work well with
+//       sequences rules.
+
 declare :: proc(
     name: string = "",
     skip: PredProc = default_skip,
