@@ -112,14 +112,5 @@ parse_string :: proc(
     user_data: rawptr = nil,
 ) -> (new_state: ParserState, ok: bool) {
     str := str
-    return parser_parse(ParserState{
-        content = &str,
-        pos = 0,
-        cur = 0,
-        loc = Location{1, 1, ""},
-        user_data = user_data,
-        // TODO: add a function to destroy this array
-        // TODO: find the best suited allocator for this
-        exec_list = new([dynamic]ExecContext)
-    }, parser)
+    return parser_parse(state_create(&str, user_data), parser)
 }

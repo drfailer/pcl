@@ -59,6 +59,7 @@ parse_number :: proc() -> ^parodin.Parser {
 
 test_parser :: proc(name: string, parser: ^parodin.Parser, str: string,) {
     state, ok := parodin.parse_string(parser, str)
+    defer parodin.state_destroy(state)
     defer free(state.user_data)
 
     fmt.printf("\n{} parser result for input \"{}\":\n", name, str)
@@ -94,6 +95,7 @@ test_parse_number_int :: proc(t: ^testing.T) {
     defer parodin.parser_destroy(parser)
 
     state, ok := parodin.parse_string(parser, "1234567890")
+    defer parodin.state_destroy(state)
     defer free(state.user_data)
     testing.expect(t, ok)
     testing.expect(t, state.user_data != nil)
@@ -109,6 +111,7 @@ test_parse_number_float1 :: proc(t: ^testing.T) {
     defer parodin.parser_destroy(parser)
 
     state, ok := parodin.parse_string(parser, "1234567890.1234567890")
+    defer parodin.state_destroy(state)
     defer free(state.user_data)
     testing.expect(t, ok)
     testing.expect(t, state.user_data != nil)
@@ -124,6 +127,7 @@ test_parse_number_float2 :: proc(t: ^testing.T) {
     defer parodin.parser_destroy(parser)
 
     state, ok := parodin.parse_string(parser, "1234567890.")
+    defer parodin.state_destroy(state)
     defer free(state.user_data)
     testing.expect(t, ok)
     testing.expect(t, state.user_data != nil)

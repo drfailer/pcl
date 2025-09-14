@@ -29,6 +29,21 @@ ParserState :: struct {
     defered_exec: bool,
 }
 
+state_create :: proc(content: ^string, user_data: rawptr) -> ParserState {
+    return ParserState{
+        content = content,
+        pos = 0,
+        cur = 0,
+        loc = Location{1, 1, ""},
+        user_data = user_data,
+        exec_list = new([dynamic]ExecContext)
+    }
+}
+
+state_destroy :: proc(state: ParserState) {
+    free(state.exec_list)
+}
+
 state_eat_one :: proc(state: ParserState) -> (new_state: ParserState, ok: bool) {
     if state.cur >= len(state.content^) do return state, false
     new_state = state
