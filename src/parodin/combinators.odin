@@ -12,6 +12,13 @@ default_exec :: proc(content: string, user_data: rawptr) -> rawptr {
     return user_data
 }
 
+test_exec :: proc($message: string) -> ExecProc {
+    return proc(content: string, user_data: rawptr) -> rawptr {
+        fmt.printfln("test_exec: {} (content = `{}')", message, content)
+        return user_data
+    }
+}
+
 default_skip :: proc(c: rune) -> bool {
     return false
 }
@@ -23,6 +30,10 @@ default_skip :: proc(c: rune) -> bool {
 //       more readable, convetion should be combinator_rule_parse +
 //       combinator_rule functions, and the lambda print error messge if
 //       required).
+
+// TODO: should the skip function be recursive (so that it is only specified in
+//       the top grammar)? -> if it is the case, it should not override skip
+//       functions specified for the sub-rules.
 
 declare :: proc(
     name: string = "",
@@ -55,6 +66,15 @@ define :: proc(parser: ^Parser, impl: ^Parser) {
         fmt.printfln("error: redifinition of parser {}.", parser.name)
     }
     parser.parsers[0] = impl
+}
+
+empty :: proc(
+    parser: ^Parser,
+) -> ^Parser {
+    parse := proc(self: ^Parser, state: ParserState) -> (new_state: ParserState, ok: bool) {
+        return state, true
+    }
+    return parser_create("emtpy", parse, default_skip, default_exec)
 }
 
 cond :: proc(
@@ -125,8 +145,6 @@ lit :: proc(
         sub_state := parser_skip(state, self.skip)
         for c in str {
             if state_eof(sub_state) || state_char(sub_state) != c {
-                // fmt.printfln("error: expected literal '{}'", str)
-                // state_print_context(new_state)
                 return state, false
             }
             sub_state = state_eat_one(sub_state) or_return
@@ -305,15 +323,98 @@ opt :: proc(
     return parser_create(name, parse, skip, exec, parsers = []^Parser{parser})
 }
 
-// TODO: rec, right_rec, left_rec
-
+/*
+ * Helper for left recursion.
+ * Use:
+ * <lrec_rule> := <recursive_rule> <op_rules> <terminal_rule> | <terminal_rule>
+ * Transforms into:
+ * <lrec_rule>  := <terminal_rule> <lrec_rule'>
+ * <lrec_rule'> := <op_rules> <terminal_rule> <lrec_rule'> | empty if <op_rules> is empty
+ *
+ * <op_rules> are used to simplify the implementation of grammars
+ * that include operators. If such rules are present, this parser will fail if
+ * they cannot be applied. Otherwise, the parser will succeed if only the
+ * <terminal_rule> is found.
+ *
+ * Example:
+ * <expr> := <add> | <term>
+ * <add>  := <expr> "+" <term>
+ * => <add> := <term> <add'>
+ *    <add'> := "+" <term> <add'>
+ * With the current behavior, the <add> parser will fail if the "+" is not
+ * found and only the exec function of <term> will be called.
+ *
+ */
 lrec :: proc(
-    parser: ..^Parser,
+    parsers: ..^Parser,
     skip: PredProc = default_skip,
     exec: ExecProc = default_exec,
     name: string = "",
 ) -> ^Parser {
-    // TODO: apply left rules > apply rigtmost rule > loop until rightmost rule is not applicable
-    // TODO: the exec proc should be called in reverse order
-    return nil
+    // <expr> := <expr> "+" <term> | <term>
+    //
+    // <expr> := <term> <expr'>
+    // <expr'> := "+" <term> <expr'> | empty
+    //
+    // <term> = <factor> <term'>
+    // <term'> = "*" <factor> <term'> | emtpy
+    //
+    // <factor> = <number> | <parent>
+
+    parse := proc(self: ^Parser, state: ParserState) -> (new_state: ParserState, ok: bool) {
+        run_exec := !new_state.defered_exec
+        new_state = parser_skip(state, self.skip)
+        new_state.defered_exec = true
+        recursive_rule := self.parsers[0]
+        terminal_rule := self.parsers[len(self.parsers) - 1]
+        exec_list_len := len(state.exec_list)
+        state := state
+
+        state_print_context(state)
+        fmt.printfln("terminal rule = {}", terminal_rule.name)
+
+        // apply the terminal rule
+        if new_state, ok = parser_parse(new_state, terminal_rule); !ok {
+            remove_range(state.exec_list, exec_list_len, len(state.exec_list))
+            return state, false
+        }
+
+        // if there are middle rules (like operators), this parser have to fail
+        // if they are not found, otherwise, both exec functions of this parser
+        // and the one of the terminal rule parser will be called. Note that
+        // this behavior may change.
+        new_state = parser_skip(new_state, self.skip)
+        if  new_state.pos == len(new_state.content) {
+            if len(self.parsers) > 2 {
+                remove_range(state.exec_list, exec_list_len, len(state.exec_list))
+                return state, false
+            } else {
+                return new_state, true
+            }
+        }
+
+        for i := 1; i < len(self.parsers) - 1; i += 1 {
+            if new_state, ok = parser_parse(new_state, self.parsers[i]); !ok {
+                remove_range(state.exec_list, exec_list_len, len(state.exec_list))
+                return state, false
+            }
+            new_state = parser_skip(new_state, self.skip)
+        }
+        if new_state, ok = parser_parse(new_state, recursive_rule); !ok {
+            remove_range(state.exec_list, exec_list_len, len(state.exec_list))
+            return state, false
+        }
+
+        if run_exec {
+            #reverse for &exec_ctx in new_state.exec_list {
+                exec_ctx.state.defered_exec = false
+                parser_exec(&exec_ctx.state, exec_ctx.exec);
+            }
+            clear(new_state.exec_list)
+            new_state.defered_exec = false
+        }
+        parser_exec(&new_state, self.exec)
+        return new_state, true
+    }
+    return parser_create(name, parse, skip, exec, parsers = parsers)
 }

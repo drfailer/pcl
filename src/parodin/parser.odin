@@ -83,12 +83,20 @@ parser_skip :: proc {
     parser_exec_from_parser,
 }
 
-parser_exec_from_proc :: proc(state: ^ParserState, parser_exec: ExecProc) {
-    state.user_data = parser_exec(state_string(state^), state.user_data)
+parser_exec_from_proc :: proc(state: ^ParserState, exec: ExecProc) {
+    if state.defered_exec {
+        append(state.exec_list, ExecContext{exec, state^})
+    } else {
+        state.user_data = exec(state_string(state^), state.user_data)
+    }
 }
 
 parser_exec_from_parser :: proc(state: ^ParserState, parser: Parser) {
-    parser_exec_from_proc(state, parser.exec)
+    if state.defered_exec {
+        append(state.exec_list, ExecContext{parser.exec, state^})
+    } else {
+        parser_exec_from_proc(state, parser.exec)
+    }
 }
 
 parser_exec :: proc {
@@ -109,6 +117,9 @@ parse_string :: proc(
         pos = 0,
         cur = 0,
         loc = Location{1, 1, ""},
-        user_data = user_data
+        user_data = user_data,
+        // TODO: add a function to destroy this array
+        // TODO: find the best suited allocator for this
+        exec_list = new([dynamic]ExecContext)
     }, parser)
 }

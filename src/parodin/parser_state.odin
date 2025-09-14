@@ -12,12 +12,21 @@ Location :: struct {
     file: string,
 }
 
+// TODO: add a max recursion depth in the state
+
+ExecContext :: struct {
+    exec: ExecProc,
+    state: ParserState,
+}
+
 ParserState :: struct {
     content: ^string,
     pos: int,
     cur: int,
     loc: Location,
     user_data: rawptr,
+    exec_list: ^[dynamic]ExecContext,
+    defered_exec: bool,
 }
 
 state_eat_one :: proc(state: ParserState) -> (new_state: ParserState, ok: bool) {
