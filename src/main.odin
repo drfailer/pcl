@@ -20,52 +20,52 @@ Node :: struct {
     childs: [dynamic]Node,
 }
 
+ExecContext :: struct {
+    nodes: [dynamic]Node,
+}
+
+create_int_node :: proc(content: string, exec_ctx: rawptr) {
+    ctx := cast(^ExecContext)exec_ctx
+    append(&ctx.nodes, Node{ name = "int", data = strconv.atoi(content) })
+}
+
+create_float_node :: proc(content: string, exec_ctx: rawptr) {
+    ctx := cast(^ExecContext)exec_ctx
+    append(&ctx.nodes, Node{ name = "float", data = strconv.atof(content) })
+}
+
 parse_digits :: proc() -> ^parodin.Parser {
     using parodin
     return plus(range('0', '9'))
 }
 
-create_int :: proc(content: string, user_data: rawptr) -> rawptr {
-    node := new(Node)
-    node.name = "int"
-    node.data = strconv.atoi(content)
-    return node
-}
-
 parse_int :: proc() -> ^parodin.Parser {
     using parodin
-    return single(parse_digits(), exec = create_int)
-}
-
-create_float :: proc(content: string, user_data: rawptr) -> rawptr {
-    node := new(Node)
-    node.name = "float"
-    node.data = strconv.atof(content)
-    return node
+    return single(parse_digits(), exec = create_int_node)
 }
 
 parse_float :: proc() -> ^parodin.Parser {
     using parodin
-    return seq(parse_digits(), lit_c('.'), opt(parse_digits()), exec = create_float)
-    // return seq(parse_digits(), lit("."), opt(parse_digits()), exec = create_float)
+    return seq(parse_digits(), lit_c('.'), opt(parse_digits()), exec = create_float_node)
 }
 
 parse_number :: proc() -> ^parodin.Parser {
     using parodin
-    return or(parse_float(), parse_int())
+    return or(parse_float(), parse_int(), name = "number", exec = test_exec("test parser number"))
 }
 
 // TODO: print the parser.
 
-test_parser :: proc(name: string, parser: ^parodin.Parser, str: string,) {
-    state, ok := parodin.parse_string(parser, str)
+test_parser :: proc(name: string, parser: ^parodin.Parser, str: string) {
+    ctx: ExecContext
+    state, ok := parodin.parse_string(parser, str, exec_ctx = &ctx)
     defer parodin.state_destroy(state)
-    defer free(state.user_data)
+    defer delete(ctx.nodes)
 
     fmt.printf("\n{} parser result for input \"{}\":\n", name, str)
     fmt.printf("  ok = {}\n", ok)
     fmt.printf("  state = {}\n", state)
-    fmt.printf("  user_data = {}\n", (cast(^Node)state.user_data)^)
+    fmt.printf("  exec_ctx = {}\n", ctx)
 }
 
 main :: proc() {
@@ -90,48 +90,48 @@ main :: proc() {
 
 @(test)
 test_parse_number_int :: proc(t: ^testing.T) {
-    node: ^Node
+    ctx: ExecContext
     parser := parse_number()
     defer parodin.parser_destroy(parser)
 
-    state, ok := parodin.parse_string(parser, "1234567890")
+    state, ok := parodin.parse_string(parser, "1234567890", exec_ctx = &ctx)
     defer parodin.state_destroy(state)
-    defer free(state.user_data)
+    defer delete(ctx.nodes)
     testing.expect(t, ok)
-    testing.expect(t, state.user_data != nil)
-    node = cast(^Node)state.user_data
+    testing.expect(t, len(ctx.nodes) == 1)
+    node := ctx.nodes[0]
     testing.expect(t, node.name == "int")
     testing.expect(t, node.data == 1234567890)
 }
 
 @(test)
 test_parse_number_float1 :: proc(t: ^testing.T) {
-    node: ^Node
+    ctx: ExecContext
     parser := parse_number()
     defer parodin.parser_destroy(parser)
 
-    state, ok := parodin.parse_string(parser, "1234567890.1234567890")
+    state, ok := parodin.parse_string(parser, "1234567890.1234567890", exec_ctx = &ctx)
     defer parodin.state_destroy(state)
-    defer free(state.user_data)
+    defer delete(ctx.nodes)
     testing.expect(t, ok)
-    testing.expect(t, state.user_data != nil)
-    node = cast(^Node)state.user_data
+    testing.expect(t, len(ctx.nodes) == 1)
+    node := ctx.nodes[0]
     testing.expect(t, node.name == "float")
     testing.expect(t, node.data == 1234567890.1234567890)
 }
 
 @(test)
 test_parse_number_float2 :: proc(t: ^testing.T) {
-    node: ^Node
+    ctx: ExecContext
     parser := parse_number()
     defer parodin.parser_destroy(parser)
 
-    state, ok := parodin.parse_string(parser, "1234567890.")
+    state, ok := parodin.parse_string(parser, "1234567890.", exec_ctx = &ctx)
     defer parodin.state_destroy(state)
-    defer free(state.user_data)
+    defer delete(ctx.nodes)
     testing.expect(t, ok)
-    testing.expect(t, state.user_data != nil)
-    node = cast(^Node)state.user_data
+    testing.expect(t, len(ctx.nodes) == 1)
+    node := ctx.nodes[0]
     testing.expect(t, node.name == "float")
     testing.expect(t, node.data == 1234567890.0)
 }

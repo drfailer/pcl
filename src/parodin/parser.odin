@@ -5,7 +5,7 @@ import "core:fmt"
 
 // parser //////////////////////////////////////////////////////////////////////
 
-ExecProc :: proc(content: string, user_data: rawptr) -> rawptr
+ExecProc :: proc(content: string, exec_ctx: rawptr)
 
 PredProc :: proc(c: rune) -> bool
 
@@ -87,7 +87,7 @@ parser_exec_from_proc :: proc(state: ^ParserState, exec: ExecProc) {
     if state.defered_exec {
         append(state.exec_list, ExecContext{exec, state^})
     } else {
-        state.user_data = exec(state_string(state^), state.user_data)
+        exec(state_string(state^), state.exec_ctx)
     }
 }
 
@@ -109,10 +109,10 @@ parser_exec :: proc {
 parse_string :: proc(
     parser: ^Parser,
     str: string,
-    user_data: rawptr = nil,
+    exec_ctx: rawptr = nil,
 ) -> (new_state: ParserState, ok: bool) {
     str := str
-    new_state, ok = parser_parse(state_create(&str, user_data), parser)
+    new_state, ok = parser_parse(state_create(&str, exec_ctx), parser)
     if !ok {
         fmt.println("syntax error:")
         state_print_context(new_state)

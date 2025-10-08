@@ -3,31 +3,25 @@ package artihmetic
 import "../src/parodin"
 import "core:fmt"
 
-exec_ints :: proc(content: string, user_data: rawptr) -> rawptr {
+exec_ints :: proc(content: string, exec_ctx: rawptr) {
     fmt.printfln("int: {}", content)
-    return user_data
 }
 
-exec_floats :: proc(content: string, user_data: rawptr) -> rawptr {
+exec_floats :: proc(content: string, exec_ctx: rawptr) {
     fmt.printfln("float: {}", content)
-    return user_data
 }
 
-exec_add :: proc(content: string, user_data: rawptr) -> rawptr {
+exec_add :: proc(content: string, exec_ctx: rawptr) {
     fmt.printfln("add: {}", content)
-    return user_data
 }
 
-exec_sub :: proc(content: string, user_data: rawptr) -> rawptr {
+exec_sub :: proc(content: string, exec_ctx: rawptr) {
     fmt.printfln("sub: {}", content)
-    return user_data
 }
 
-exec_number :: proc(content: string, user_data: rawptr) -> rawptr {
+exec_number :: proc(content: string, exec_ctx: rawptr) {
     fmt.printfln("number: {}", content)
-    return user_data
 }
-
 
 skip_spaces :: proc(char: rune) -> bool {
     return u8(char) == ' '

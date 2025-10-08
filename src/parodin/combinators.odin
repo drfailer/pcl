@@ -8,14 +8,11 @@ default_parse :: proc(self: ^Parser, state: ParserState) -> (new_state: ParserSt
     return state, true
 }
 
-default_exec :: proc(content: string, user_data: rawptr) -> rawptr {
-    return user_data
-}
+default_exec :: proc(content: string, exec_ctx: rawptr) {}
 
 test_exec :: proc($message: string) -> ExecProc {
-    return proc(content: string, user_data: rawptr) -> rawptr {
+    return proc(content: string, exec_ctx: rawptr) {
         fmt.printfln("test_exec: {} (content = `{}')", message, content)
-        return user_data
     }
 }
 
@@ -30,15 +27,6 @@ default_skip :: proc(c: rune) -> bool {
 //       more readable, convetion should be combinator_rule_parse +
 //       combinator_rule functions, and the lambda print error messge if
 //       required).
-
-// TODO: should the skip function be recursive (so that it is only specified in
-//       the top grammar)? -> if it is the case, it should not override skip
-//       functions specified for the sub-rules.
-
-// TODO: it may be better if the exec proc was taking a list of tokens as input.
-//       The tokens beeing either created by sub exec procs, or default
-//       generated (containing the content). This would work well with
-//       sequences rules.
 
 declare :: proc(
     name: string = "parser",
