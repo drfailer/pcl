@@ -1,6 +1,7 @@
 package parodin
 
 import "core:strings"
+import "core:fmt"
 
 // parser //////////////////////////////////////////////////////////////////////
 
@@ -18,7 +19,6 @@ Parser :: struct {
     exec: ExecProc,
     pred: PredProc,
     parsers: [dynamic]^Parser,
-    report_error: bool, // tels if the parser should report an error. This value is determined automatically.
 }
 
 parser_create :: proc(
@@ -112,5 +112,17 @@ parse_string :: proc(
     user_data: rawptr = nil,
 ) -> (new_state: ParserState, ok: bool) {
     str := str
-    return parser_parse(state_create(&str, user_data), parser)
+    new_state, ok = parser_parse(state_create(&str, user_data), parser)
+    if !ok {
+        fmt.println("syntax error:")
+        state_print_context(new_state)
+    }
+    return new_state, ok
+}
+
+// print grammar ///////////////////////////////////////////////////////////////
+
+parser_print :: proc(parser: ^Parser) {
+    // TODO
+    // we need a combinator type in the parser
 }

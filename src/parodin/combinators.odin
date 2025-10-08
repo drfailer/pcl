@@ -35,13 +35,13 @@ default_skip :: proc(c: rune) -> bool {
 //       the top grammar)? -> if it is the case, it should not override skip
 //       functions specified for the sub-rules.
 
-// TODO: it may be better if the exec proc was taking a list of tokes as input.
+// TODO: it may be better if the exec proc was taking a list of tokens as input.
 //       The tokens beeing either created by sub exec procs, or default
 //       generated (containing the content). This would work well with
 //       sequences rules.
 
 declare :: proc(
-    name: string = "",
+    name: string = "parser",
     skip: PredProc = default_skip,
     exec: ExecProc = default_exec,
 ) -> ^Parser {
@@ -53,7 +53,7 @@ declare :: proc(
         new_state = parser_skip(state, self.skip)
         sub_state := new_state
         if sub_state, ok = parser_parse(sub_state, self.parsers[0]); !ok {
-            return state, false
+            return sub_state, false
         }
         new_state.cur = sub_state.cur
         parser_exec(&new_state, self.exec)
@@ -73,9 +73,7 @@ define :: proc(parser: ^Parser, impl: ^Parser) {
     parser.parsers[0] = impl
 }
 
-empty :: proc(
-    parser: ^Parser,
-) -> ^Parser {
+empty :: proc() -> ^Parser {
     parse := proc(self: ^Parser, state: ParserState) -> (new_state: ParserState, ok: bool) {
         return state, true
     }
@@ -86,20 +84,23 @@ cond :: proc(
     pred: PredProc,
     skip: PredProc = default_skip,
     exec: ExecProc = default_exec,
-    name: string = "",
+    name: string = "cond",
 ) -> ^Parser {
     parse := proc(self: ^Parser, state: ParserState) -> (new_state: ParserState, ok: bool) {
-        if state_eof(state) do return state, false
-
-            new_state = parser_skip(state, self.skip)
-            if (self.pred(state_char(new_state))) {
-                new_state, ok = state_eat_one(state)
-                if !ok do return state, false
-                    parser_exec(&new_state, self.exec)
-                    state_save_pos(&new_state)
-                    return new_state, true
-            }
+        if state_eof(state) {
             return state, false
+        }
+
+        new_state = parser_skip(state, self.skip)
+        if (self.pred(state_char(new_state))) {
+            if new_state, ok = state_eat_one(new_state); !ok {
+                return new_state, false
+            }
+            parser_exec(&new_state, self.exec)
+            state_save_pos(&new_state)
+            return new_state, true
+        }
+        return new_state, false
     }
     return parser_create(name, parse, skip, exec, pred = pred)
 }
@@ -108,7 +109,7 @@ one_of :: proc(
     $chars: string,
     skip: PredProc = default_skip,
     exec: ExecProc = default_exec,
-    name: string = "",
+    name: string = "one_of",
 ) -> ^Parser {
     return cond(proc(c: rune) -> bool {
         return strings.contains_rune(chars, rune(c))
@@ -120,7 +121,7 @@ range :: proc(
     $c2: rune,
     skip: PredProc = default_skip,
     exec: ExecProc = default_exec,
-    name: string = "",
+    name: string = "rang",
 ) -> ^Parser {
     return cond(proc(c: rune) -> bool {
         return c1 <= c && c <= c2
@@ -131,7 +132,7 @@ lit_c :: proc(
     $char: rune,
     skip: PredProc = default_skip,
     exec: ExecProc = default_exec,
-    name: string = "",
+    name: string = "lit_c",
 ) -> ^Parser {
     return cond(proc(c: rune) -> bool {
         return c == char
@@ -142,19 +143,16 @@ lit :: proc(
     $str: string,
     skip: PredProc = default_skip,
     exec: ExecProc = default_exec,
-    name: string = "",
+    name: string = "lit",
 ) -> ^Parser {
     parse := proc(self: ^Parser, state: ParserState) -> (new_state: ParserState, ok: bool) {
-        // TODO: clean up this function
-        new_state = state
-        sub_state := parser_skip(state, self.skip)
+        new_state := parser_skip(state, self.skip)
         for c in str {
-            if state_eof(sub_state) || state_char(sub_state) != c {
-                return state, false
+            if state_eof(new_state) || state_char(new_state) != c {
+                return new_state, false
             }
-            sub_state = state_eat_one(sub_state) or_return
+            new_state = state_eat_one(new_state) or_return
         }
-        new_state = sub_state
         parser_exec(&new_state, self.exec)
         state_save_pos(&new_state)
         return new_state, true
@@ -166,15 +164,13 @@ single :: proc(
     parser: ^Parser,
     skip: PredProc = default_skip,
     exec: ExecProc = default_exec,
-    name: string = "",
+    name: string = "single",
 ) -> ^Parser {
     parse := proc(self: ^Parser, state: ParserState) -> (new_state: ParserState, ok: bool) {
         new_state = parser_skip(state, self.skip)
-        sub_state := new_state
-        if sub_state, ok = parser_parse(sub_state, self.parsers[0]); !ok {
-            return state, false
+        if new_state, ok = parser_parse(new_state, self.parsers[0]); !ok {
+            return new_state, false
         }
-        new_state.cur = sub_state.cur
         parser_exec(&new_state, self.exec)
         state_save_pos(&new_state)
         return new_state, true
@@ -186,7 +182,7 @@ star :: proc(
     parser: ^Parser,
     skip: PredProc = default_skip,
     exec: ExecProc = default_exec,
-    name: string = "",
+    name: string = "star",
 ) -> ^Parser {
     parse := proc(self: ^Parser, state: ParserState) -> (new_state: ParserState, ok: bool) {
         new_state = parser_skip(state, self.skip)
@@ -209,7 +205,7 @@ plus :: proc(
     parser: ^Parser,
     skip: PredProc = default_skip,
     exec: ExecProc = default_exec,
-    name: string = "",
+    name: string = "plus",
 ) -> ^Parser {
     parse := proc(self: ^Parser, state: ParserState) -> (new_state: ParserState, ok: bool) {
         new_state = parser_skip(state, self.skip)
@@ -223,7 +219,7 @@ plus :: proc(
             state_save_pos(&new_state)
             return new_state, true
         }
-        return state, false
+        return new_state, false
     }
     return parser_create(name, parse, skip, exec, parsers = []^Parser{parser})
 }
@@ -233,7 +229,7 @@ times :: proc(
     parser: ^Parser,
     skip: PredProc = default_skip,
     exec: ExecProc = default_exec,
-    name: string = "",
+    name: string = "times",
 ) -> ^Parser {
     parse := proc(self: ^Parser, state: ParserState) -> (new_state: ParserState, ok: bool) {
         count := 0
@@ -249,7 +245,7 @@ times :: proc(
             state_save_pos(&new_state)
             return new_state, true
         }
-        return state, false
+        return new_state, false
     }
     return parser_create(name, parse, skip, exec, parsers = []^Parser{parser})
 }
@@ -260,7 +256,7 @@ seq :: proc(
     parsers: ..^Parser,
     skip: PredProc = default_skip,
     exec: ExecProc = default_exec,
-    name: string = "",
+    name: string = "seq",
 ) -> ^Parser {
     parse := proc(self: ^Parser, state: ParserState) -> (new_state: ParserState, ok: bool) {
         new_state = state
@@ -268,7 +264,7 @@ seq :: proc(
         for parser in self.parsers {
             sub_state = parser_skip(sub_state, self.skip)
             if sub_state, ok = parser_parse(sub_state, parser); !ok {
-                return state, false
+                return sub_state, false
             }
             new_state.cur = sub_state.cur
         }
@@ -292,7 +288,7 @@ or :: proc(
     parsers: ..^Parser,
     skip: PredProc = default_skip,
     exec: ExecProc = default_exec,
-    name: string = "",
+    name: string = "or",
 ) -> ^Parser {
     parse := proc(self: ^Parser, state: ParserState) -> (new_state: ParserState, ok: bool) {
         new_state = parser_skip(state, self.skip)
@@ -303,7 +299,7 @@ or :: proc(
                 return end_state, true
             }
         }
-        return state, false
+        return new_state, false
     }
     return parser_create(name, parse, skip, exec, parsers = parsers)
 }
@@ -312,15 +308,13 @@ opt :: proc(
     parser: ^Parser,
     skip: PredProc = default_skip,
     exec: ExecProc = default_exec,
-    name: string = "",
+    name: string = "opt",
 ) -> ^Parser {
     parse := proc(self: ^Parser, state: ParserState) -> (new_state: ParserState, ok: bool) {
         new_state = parser_skip(state, self.skip)
-        sub_state := new_state
-        if sub_state, ok = parser_parse(sub_state, self.parsers[0]); !ok {
-            return state, true
+        if new_state, ok = parser_parse(new_state, self.parsers[0]); !ok {
+            return new_state, true
         }
-        new_state.cur = sub_state.cur
         parser_exec(&new_state, self.exec)
         state_save_pos(&new_state)
         return new_state, true
@@ -354,7 +348,7 @@ lrec :: proc(
     parsers: ..^Parser,
     skip: PredProc = default_skip,
     exec: ExecProc = default_exec,
-    name: string = "",
+    name: string = "lrec",
 ) -> ^Parser {
     // <expr> := <expr> "+" <term> | <term>
     //
@@ -375,13 +369,10 @@ lrec :: proc(
         exec_list_len := len(state.exec_list)
         state := state
 
-        state_print_context(state)
-        fmt.printfln("terminal rule = {}", terminal_rule.name)
-
         // apply the terminal rule
         if new_state, ok = parser_parse(new_state, terminal_rule); !ok {
             remove_range(state.exec_list, exec_list_len, len(state.exec_list))
-            return state, false
+            return new_state, false
         }
 
         // if there are middle rules (like operators), this parser have to fail
@@ -392,7 +383,7 @@ lrec :: proc(
         if  new_state.pos == len(new_state.content) {
             if len(self.parsers) > 2 {
                 remove_range(state.exec_list, exec_list_len, len(state.exec_list))
-                return state, false
+                return new_state, false
             } else {
                 return new_state, true
             }
@@ -401,13 +392,13 @@ lrec :: proc(
         for i := 1; i < len(self.parsers) - 1; i += 1 {
             if new_state, ok = parser_parse(new_state, self.parsers[i]); !ok {
                 remove_range(state.exec_list, exec_list_len, len(state.exec_list))
-                return state, false
+                return new_state, false
             }
             new_state = parser_skip(new_state, self.skip)
         }
         if new_state, ok = parser_parse(new_state, recursive_rule); !ok {
             remove_range(state.exec_list, exec_list_len, len(state.exec_list))
-            return state, false
+            return new_state, false
         }
 
         if run_exec {
