@@ -51,7 +51,7 @@ parse_float :: proc() -> ^parodin.Parser {
 
 parse_number :: proc() -> ^parodin.Parser {
     using parodin
-    return or(parse_float(), parse_int(), name = "number", exec = test_exec("test parser number"))
+    return or(parse_float(), parse_int(), name = "number")
 }
 
 // TODO: print the parser.

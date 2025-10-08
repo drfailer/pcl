@@ -2,14 +2,28 @@ package parodin
 
 import "core:strings"
 import "core:fmt"
+import "core:mem"
 
 // parser //////////////////////////////////////////////////////////////////////
+
+SyntaxError :: struct {
+    message: string,
+}
+
+InternalError :: struct {
+    message: string,
+}
+
+ParserError :: union {
+    SyntaxError,
+    InternalError,
+}
 
 ExecProc :: proc(content: string, exec_ctx: rawptr)
 
 PredProc :: proc(c: rune) -> bool
 
-ParseProc :: proc(self: ^Parser, state: ParserState) -> (new_state: ParserState, ok: bool)
+ParseProc :: proc(self: ^Parser, state: ParserState) -> (new_state: ParserState, err: ParserError)
 
 Parser :: struct {
     rc: u32,
@@ -62,7 +76,7 @@ parser_destroy :: proc(parser: ^Parser) {
     free(parser)
 }
 
-parser_parse :: proc(state: ParserState, parser: ^Parser) -> (new_state: ParserState, ok: bool) {
+parser_parse :: proc(state: ParserState, parser: ^Parser) -> (new_state: ParserState, err: ParserError) {
     return parser->parse(state)
 }
 
@@ -111,13 +125,27 @@ parse_string :: proc(
     str: string,
     exec_ctx: rawptr = nil,
 ) -> (new_state: ParserState, ok: bool) {
+    // create the arena for the temporary allocations (error messages)
+    bytes: [4096]u8
+    arena: mem.Arena
+    mem.arena_init(&arena, bytes[:])
+    context.temp_allocator = mem.arena_allocator(&arena)
+
+    // execute the given parser on the string and print error
+    err: ParserError
     str := str
-    new_state, ok = parser_parse(state_create(&str, exec_ctx), parser)
-    if !ok {
-        fmt.println("syntax error:")
-        state_print_context(new_state)
+    new_state, err = parser_parse(state_create(&str, exec_ctx), parser)
+    if err != nil {
+        switch e in err {
+        case SyntaxError:
+            fmt.printfln("syntax error: {}", e.message)
+            state_print_context(new_state)
+        case InternalError:
+            fmt.printfln("internal error: {}", e.message)
+        }
+        ok = false
     }
-    return new_state, ok
+    return new_state, true
 }
 
 // print grammar ///////////////////////////////////////////////////////////////
