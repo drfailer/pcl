@@ -37,9 +37,10 @@ arithmetic_grammar :: proc() -> ^parodin.Parser {
     using parodin
 
     // left recursive grammar
-    digits := plus(range('0', '9'), name = "digits", exec = exec_ints)
+    digits := plus(range('0', '9'), name = "digits")
+    ints := single(digits, name = "ints", exec = exec_ints)
     floats := seq(digits, lit_c('.'), opt(digits), name = "floats", exec = exec_floats)
-    number := or(digits, floats, name = "number", exec = exec_number)
+    number := or(floats, ints, name = "number", exec = exec_number)
     add := declare(name = "add", exec = exec_add)
     sub := declare(name = "sub", exec = exec_sub)
     expr := or(add, sub, number, skip = skip_spaces)

@@ -168,9 +168,11 @@ single :: proc(
 ) -> ^Parser {
     parse := proc(self: ^Parser, state: ParserState) -> (new_state: ParserState, ok: bool) {
         new_state = parser_skip(state, self.skip)
-        if new_state, ok = parser_parse(new_state, self.parsers[0]); !ok {
-            return new_state, false
+        sub_state := new_state
+        if sub_state, ok = parser_parse(sub_state, self.parsers[0]); !ok {
+            return sub_state, false
         }
+        new_state.cur = sub_state.cur
         parser_exec(&new_state, self.exec)
         state_save_pos(&new_state)
         return new_state, true
@@ -293,10 +295,11 @@ or :: proc(
     parse := proc(self: ^Parser, state: ParserState) -> (new_state: ParserState, ok: bool) {
         new_state = parser_skip(state, self.skip)
         for parser in self.parsers {
-            if end_state, ok := parser_parse(new_state, parser); ok {
-                parser_exec(&end_state, self.exec)
-                state_save_pos(&end_state)
-                return end_state, true
+            if sub_state, ok := parser_parse(new_state, parser); ok {
+                new_state.cur = sub_state.cur;
+                parser_exec(&new_state, self.exec)
+                state_save_pos(&new_state)
+                return new_state, true
             }
         }
         return new_state, false
