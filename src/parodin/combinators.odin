@@ -418,4 +418,5 @@ lrec :: proc(
     return parser_create(name, parse, skip, exec, parsers = parsers)
 }
 
-// TODO: surround($open: rune, $close: rune)
+// will not parse the inside of the block (used for writing preprocessing tool)
+// TODO: block($open: string, $close: string)
