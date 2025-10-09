@@ -17,11 +17,15 @@ default_skip :: proc(c: rune) -> bool {
     return false
 }
 
+// default parser functions ////////////////////////////////////////////////////
+
+SKIP := default_skip
+
 // combinators /////////////////////////////////////////////////////////////////
 
 declare :: proc(
     name: string = "parser",
-    skip: PredProc = default_skip,
+    skip: PredProc = SKIP,
     exec: ExecProc = default_exec,
 ) -> ^Parser {
     parse := proc(self: ^Parser, state: ParserState) -> (new_state: ParserState, err: ParserError) {
@@ -69,13 +73,13 @@ empty :: proc() -> ^Parser {
     parse := proc(self: ^Parser, state: ParserState) -> (new_state: ParserState, err: ParserError) {
         return state, nil
     }
-    return parser_create("emtpy", parse, default_skip, default_exec)
+    return parser_create("emtpy", parse, SKIP, default_exec)
 }
 
 // TODO: create a better error message for rules that use cond
 cond :: proc(
     pred: PredProc,
-    skip: PredProc = default_skip,
+    skip: PredProc = SKIP,
     exec: ExecProc = default_exec,
     name: string = "cond",
 ) -> ^Parser {
@@ -102,7 +106,7 @@ cond :: proc(
 
 one_of :: proc(
     $chars: string,
-    skip: PredProc = default_skip,
+    skip: PredProc = SKIP,
     exec: ExecProc = default_exec,
     name: string = "one_of",
 ) -> ^Parser {
@@ -114,7 +118,7 @@ one_of :: proc(
 range :: proc(
     $c1: rune,
     $c2: rune,
-    skip: PredProc = default_skip,
+    skip: PredProc = SKIP,
     exec: ExecProc = default_exec,
     name: string = "range",
 ) -> ^Parser {
@@ -125,7 +129,7 @@ range :: proc(
 
 lit_c :: proc(
     $char: rune,
-    skip: PredProc = default_skip,
+    skip: PredProc = SKIP,
     exec: ExecProc = default_exec,
     name: string = "lit_c",
 ) -> ^Parser {
@@ -136,7 +140,7 @@ lit_c :: proc(
 
 lit :: proc(
     $str: string,
-    skip: PredProc = default_skip,
+    skip: PredProc = SKIP,
     exec: ExecProc = default_exec,
     name: string = "lit",
 ) -> ^Parser {
@@ -155,9 +159,11 @@ lit :: proc(
     return parser_create(name, parse, skip, exec)
 }
 
+// TODO regex rule
+
 single :: proc(
     parser: ^Parser,
-    skip: PredProc = default_skip,
+    skip: PredProc = SKIP,
     exec: ExecProc = default_exec,
     name: string = "single",
 ) -> ^Parser {
@@ -177,7 +183,7 @@ single :: proc(
 
 star :: proc(
     parser: ^Parser,
-    skip: PredProc = default_skip,
+    skip: PredProc = SKIP,
     exec: ExecProc = default_exec,
     name: string = "star",
 ) -> ^Parser {
@@ -200,7 +206,7 @@ star :: proc(
 
 plus :: proc(
     parser: ^Parser,
-    skip: PredProc = default_skip,
+    skip: PredProc = SKIP,
     exec: ExecProc = default_exec,
     name: string = "plus",
 ) -> ^Parser {
@@ -228,7 +234,7 @@ plus :: proc(
 times :: proc(
     $nb_times: int,
     parser: ^Parser,
-    skip: PredProc = default_skip,
+    skip: PredProc = SKIP,
     exec: ExecProc = default_exec,
     name: string = "times",
 ) -> ^Parser {
@@ -259,7 +265,7 @@ times :: proc(
 
 seq :: proc(
     parsers: ..^Parser,
-    skip: PredProc = default_skip,
+    skip: PredProc = SKIP,
     exec: ExecProc = default_exec,
     name: string = "seq",
 ) -> ^Parser {
@@ -300,7 +306,7 @@ seq :: proc(
  */
 or :: proc(
     parsers: ..^Parser,
-    skip: PredProc = default_skip,
+    skip: PredProc = SKIP,
     exec: ExecProc = default_exec,
     name: string = "or",
 ) -> ^Parser {
@@ -325,7 +331,7 @@ or :: proc(
 
 opt :: proc(
     parser: ^Parser,
-    skip: PredProc = default_skip,
+    skip: PredProc = SKIP,
     exec: ExecProc = default_exec,
     name: string = "opt",
 ) -> ^Parser {
@@ -365,7 +371,7 @@ opt :: proc(
  */
 lrec :: proc(
     parsers: ..^Parser,
-    skip: PredProc = default_skip,
+    skip: PredProc = SKIP,
     exec: ExecProc = default_exec,
     name: string = "lrec",
 ) -> ^Parser {
