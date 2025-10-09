@@ -140,6 +140,10 @@ parse_string :: proc(
     err: ParserError
     str := str
     new_state, err = parser_parse(state_create(&str, exec_data), parser)
+
+    if !state_eof(new_state) {
+        err = SyntaxError{"the parser did not consume all the string."}
+    }
     if err != nil {
         switch e in err {
         case SyntaxError:
