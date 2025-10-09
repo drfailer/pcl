@@ -5,10 +5,10 @@ import "core:strings"
 
 // default parser functions ////////////////////////////////////////////////////
 
-default_exec :: proc(content: string, exec_ctx: rawptr) {}
+default_exec :: proc(content: string, exec_data: rawptr) {}
 
 test_exec :: proc($message: string) -> ExecProc {
-    return proc(content: string, exec_ctx: rawptr) {
+    return proc(content: string, exec_data: rawptr) {
         fmt.printfln("test_exec: {} (content = `{}')", message, content)
     }
 }
@@ -32,14 +32,21 @@ declare :: proc(
             strings.write_string(&sb, "`.")
             return state, InternalError{strings.to_string(sb)}
         }
+
+        // new_state = parser_skip(state, self.skip)
+        // sub_state := new_state
+        // if sub_state, err = parser_parse(sub_state, self.parsers[0]); err != nil {
+        //     return sub_state, err
+        // }
+        // new_state.cur = sub_state.cur
+        // parser_exec(&new_state, self.exec)
+        // state_save_pos(&new_state)
+        // return new_state, nil
+
         new_state = parser_skip(state, self.skip)
-        sub_state := new_state
-        if sub_state, err = parser_parse(sub_state, self.parsers[0]); err != nil {
-            return sub_state, err
+        if new_state, err = parser_parse(new_state, self.parsers[0]); err != nil {
+            return new_state, err
         }
-        new_state.cur = sub_state.cur
-        parser_exec(&new_state, self.exec)
-        state_save_pos(&new_state)
         return new_state, nil
     }
     return parser_create(name, parse, skip, exec, parsers = []^Parser{nil})
@@ -51,6 +58,9 @@ define :: proc(parser: ^Parser, impl: ^Parser) {
     }
     if parser.parsers[0] != nil {
         fmt.printfln("error: redifinition of parser {}.", parser.name)
+    }
+    if parser.exec != default_exec && impl.exec == default_exec {
+        impl.exec = parser.exec
     }
     parser.parsers[0] = impl
 }
@@ -359,82 +369,53 @@ lrec :: proc(
     exec: ExecProc = default_exec,
     name: string = "lrec",
 ) -> ^Parser {
-    // <expr> := <expr> "+" <term> | <term>
-    //
-    // <expr> := <term> <expr'>
-    // <expr'> := "+" <term> <expr'> | empty
-    //
-    // <term> = <factor> <term'>
-    // <term'> = "*" <factor> <term'> | emtpy
-    //
-    // <factor> = <number> | <parent>
-
     parse := proc(self: ^Parser, state: ParserState) -> (new_state: ParserState, err: ParserError) {
-        run_exec := !new_state.defered_exec
-        new_state = parser_skip(state, self.skip)
-        new_state.defered_exec = true
         recursive_rule := self.parsers[0]
         terminal_rule := self.parsers[len(self.parsers) - 1]
+        middle_rules := self.parsers[1:len(self.parsers) - 1]
+
+        run_exec := !state.defered_exec
+        new_state = parser_skip(state, self.skip)
+        new_state.defered_exec = true
         exec_list_len := len(state.exec_list)
-        state := state
 
         // apply the terminal rule
         if new_state, err = parser_parse(new_state, terminal_rule); err != nil {
-            switch e in err {
-            case InternalError:
-                return new_state, err
-            case SyntaxError:
-                remove_range(state.exec_list, exec_list_len, len(state.exec_list))
-                sb := strings.builder_make(allocator = context.temp_allocator)
-                strings.write_string(&sb, "terminale rule in parser `")
-                strings.write_string(&sb, self.name)
-                strings.write_string(&sb, "` returned the error `")
-                strings.write_string(&sb, e.message)
-                strings.write_string(&sb, "`.")
-                return new_state, SyntaxError{strings.to_string(sb)}
-            }
+            return new_state, err
         }
 
-        // if there are middle rules (like operators), this parser have to fail
-        // if they are not found, otherwise, both exec functions of this parser
-        // and the one of the terminal rule parser will be called. Note that
-        // this behavior may change.
         new_state = parser_skip(new_state, self.skip)
-        if  new_state.pos == len(new_state.content) {
-            if len(self.parsers) > 2 {
-                remove_range(state.exec_list, exec_list_len, len(state.exec_list))
-                sb := strings.builder_make(allocator = context.temp_allocator)
-                strings.write_string(&sb, "cannoe apply middle rule in parser `")
-                strings.write_string(&sb, self.name)
-                strings.write_string(&sb, "`.")
-                return new_state, SyntaxError{strings.to_string(sb)}
-            } else {
-                return new_state, nil
-            }
+        if  state_eof(new_state) && len(middle_rules) == 0 {
+            return new_state, nil
         }
 
-        for i := 1; i < len(self.parsers) - 1; i += 1 {
-            if new_state, err = parser_parse(new_state, self.parsers[i]); err != nil {
-                remove_range(state.exec_list, exec_list_len, len(state.exec_list))
+        // middle rules
+        for parser in middle_rules {
+            if new_state, err = parser_parse(new_state, parser); err != nil {
+                remove_range(new_state.exec_list, exec_list_len, len(new_state.exec_list))
                 return new_state, err
             }
             new_state = parser_skip(new_state, self.skip)
         }
+
+        // recurse
         if new_state, err = parser_parse(new_state, recursive_rule); err != nil {
-            remove_range(state.exec_list, exec_list_len, len(state.exec_list))
+            remove_range(new_state.exec_list, exec_list_len, len(new_state.exec_list))
             return new_state, err
         }
 
+        new_state.pos = state.pos
+        inject_at(new_state.exec_list, exec_list_len, ExecContext{self.exec, new_state})
         if run_exec {
-            #reverse for &exec_ctx in new_state.exec_list {
-                exec_ctx.state.defered_exec = false
-                parser_exec(&exec_ctx.state, exec_ctx.exec);
+            #reverse for &ctx in new_state.exec_list {
+                parser_exec(ctx);
             }
             clear(new_state.exec_list)
             new_state.defered_exec = false
         }
-        parser_exec(&new_state, self.exec)
         return new_state, nil
     }
     return parser_create(name, parse, skip, exec, parsers = parsers)
 }
+
+// TODO: surround($open: rune, $close: rune)

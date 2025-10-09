@@ -24,18 +24,18 @@ ParserState :: struct {
     pos: int,
     cur: int,
     loc: Location,
-    exec_ctx: rawptr,
+    exec_data: rawptr,
     exec_list: ^[dynamic]ExecContext,
     defered_exec: bool,
 }
 
-state_create :: proc(content: ^string, exec_ctx: rawptr) -> ParserState {
+state_create :: proc(content: ^string, exec_data: rawptr) -> ParserState {
     return ParserState{
         content = content,
         pos = 0,
         cur = 0,
         loc = Location{1, 1, ""},
-        exec_ctx = exec_ctx,
+        exec_data = exec_data,
         exec_list = new([dynamic]ExecContext)
     }
 }

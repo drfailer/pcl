@@ -19,7 +19,7 @@ ParserError :: union {
     InternalError,
 }
 
-ExecProc :: proc(content: string, exec_ctx: rawptr)
+ExecProc :: proc(content: string, exec_data: rawptr)
 
 PredProc :: proc(c: rune) -> bool
 
@@ -101,7 +101,7 @@ parser_exec_from_proc :: proc(state: ^ParserState, exec: ExecProc) {
     if state.defered_exec {
         append(state.exec_list, ExecContext{exec, state^})
     } else {
-        exec(state_string(state^), state.exec_ctx)
+        exec(state_string(state^), state.exec_data)
     }
 }
 
@@ -113,9 +113,14 @@ parser_exec_from_parser :: proc(state: ^ParserState, parser: Parser) {
     }
 }
 
+parser_exec_from_exec_context :: proc(ctx: ExecContext) {
+    ctx.exec(state_string(ctx.state), ctx.state.exec_data)
+}
+
 parser_exec :: proc {
     parser_exec_from_proc,
     parser_exec_from_parser,
+    parser_exec_from_exec_context,
 }
 
 // parse api ///////////////////////////////////////////////////////////////////
@@ -123,7 +128,7 @@ parser_exec :: proc {
 parse_string :: proc(
     parser: ^Parser,
     str: string,
-    exec_ctx: rawptr = nil,
+    exec_data: rawptr = nil,
 ) -> (new_state: ParserState, ok: bool) {
     // create the arena for the temporary allocations (error messages)
     bytes: [4096]u8
@@ -134,7 +139,7 @@ parse_string :: proc(
     // execute the given parser on the string and print error
     err: ParserError
     str := str
-    new_state, err = parser_parse(state_create(&str, exec_ctx), parser)
+    new_state, err = parser_parse(state_create(&str, exec_data), parser)
     if err != nil {
         switch e in err {
         case SyntaxError:

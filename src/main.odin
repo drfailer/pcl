@@ -24,13 +24,13 @@ ExecContext :: struct {
     nodes: [dynamic]Node,
 }
 
-create_int_node :: proc(content: string, exec_ctx: rawptr) {
-    ctx := cast(^ExecContext)exec_ctx
+create_int_node :: proc(content: string, exec_data: rawptr) {
+    ctx := cast(^ExecContext)exec_data
     append(&ctx.nodes, Node{ name = "int", data = strconv.atoi(content) })
 }
 
-create_float_node :: proc(content: string, exec_ctx: rawptr) {
-    ctx := cast(^ExecContext)exec_ctx
+create_float_node :: proc(content: string, exec_data: rawptr) {
+    ctx := cast(^ExecContext)exec_data
     append(&ctx.nodes, Node{ name = "float", data = strconv.atof(content) })
 }
 
@@ -58,14 +58,14 @@ parse_number :: proc() -> ^parodin.Parser {
 
 test_parser :: proc(name: string, parser: ^parodin.Parser, str: string) {
     ctx: ExecContext
-    state, ok := parodin.parse_string(parser, str, exec_ctx = &ctx)
+    state, ok := parodin.parse_string(parser, str, exec_data = &ctx)
     defer parodin.state_destroy(state)
     defer delete(ctx.nodes)
 
     fmt.printf("\n{} parser result for input \"{}\":\n", name, str)
     fmt.printf("  ok = {}\n", ok)
     fmt.printf("  state = {}\n", state)
-    fmt.printf("  exec_ctx = {}\n", ctx)
+    fmt.printf("  exec_data = {}\n", ctx)
 }
 
 main :: proc() {
@@ -94,7 +94,7 @@ test_parse_number_int :: proc(t: ^testing.T) {
     parser := parse_number()
     defer parodin.parser_destroy(parser)
 
-    state, ok := parodin.parse_string(parser, "1234567890", exec_ctx = &ctx)
+    state, ok := parodin.parse_string(parser, "1234567890", exec_data = &ctx)
     defer parodin.state_destroy(state)
     defer delete(ctx.nodes)
     testing.expect(t, ok)
@@ -110,7 +110,7 @@ test_parse_number_float1 :: proc(t: ^testing.T) {
     parser := parse_number()
     defer parodin.parser_destroy(parser)
 
-    state, ok := parodin.parse_string(parser, "1234567890.1234567890", exec_ctx = &ctx)
+    state, ok := parodin.parse_string(parser, "1234567890.1234567890", exec_data = &ctx)
     defer parodin.state_destroy(state)
     defer delete(ctx.nodes)
     testing.expect(t, ok)
@@ -126,7 +126,7 @@ test_parse_number_float2 :: proc(t: ^testing.T) {
     parser := parse_number()
     defer parodin.parser_destroy(parser)
 
-    state, ok := parodin.parse_string(parser, "1234567890.", exec_ctx = &ctx)
+    state, ok := parodin.parse_string(parser, "1234567890.", exec_data = &ctx)
     defer parodin.state_destroy(state)
     defer delete(ctx.nodes)
     testing.expect(t, ok)

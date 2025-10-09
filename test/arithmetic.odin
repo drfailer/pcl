@@ -3,6 +3,8 @@ package artihmetic
 import "../src/parodin"
 import "core:fmt"
 
+// TODO: create a proper ast and proper tests
+
 exec_ints :: proc(content: string, exec_ctx: rawptr) {
     fmt.printfln("int: {}", content)
 }
@@ -49,6 +51,16 @@ arithmetic_grammar :: proc() -> ^parodin.Parser {
     return expr
 }
 
+// <expr> := <expr> "+" <term> | <term>
+//
+// <expr> := <term> <expr'>
+// <expr'> := "+" <term> <expr'> | empty
+//
+// <term> = <factor> <term'>
+// <term'> = "*" <factor> <term'> | emtpy
+//
+// <factor> = <number> | <parent>
+
 main :: proc() {
     arithmetic_parser := arithmetic_grammar()
     defer parodin.parser_destroy(arithmetic_parser)
@@ -57,6 +69,6 @@ main :: proc() {
     fmt.printfln("{}, {}", state, ok);
     state, ok = parodin.parse_string(arithmetic_parser, "1 + 2")
     fmt.printfln("{}, {}", state, ok);
-    state, ok = parodin.parse_string(arithmetic_parser, "1 - 2 + 3")
+    state, ok = parodin.parse_string(arithmetic_parser, "1 - 2 + 3 - 4")
     fmt.printfln("{}, {}", state, ok);
 }
