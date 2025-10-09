@@ -319,6 +319,7 @@ or :: proc(
                 state_save_pos(&new_state)
                 return new_state, nil
             }
+            free_all(context.temp_allocator)
         }
         sb := strings.builder_make(allocator = context.temp_allocator)
         strings.write_string(&sb, "none of the rules in `")
@@ -340,6 +341,7 @@ opt :: proc(
         if new_state, err = parser_parse(new_state, self.parsers[0]); err != nil {
             return new_state, nil
         }
+        free_all(context.temp_allocator)
         parser_exec(&new_state, self.exec)
         state_save_pos(&new_state)
         return new_state, nil
