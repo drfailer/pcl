@@ -98,16 +98,20 @@ parser_skip :: proc {
 }
 
 parser_exec_from_proc :: proc(state: ^ParserState, exec: ExecProc) {
-    if state.defered_exec {
-        append(state.exec_list, ExecContext{exec, state^})
+    if state.recursion_count > 0 {
+        if exec != default_exec {
+            append(state.exec_list, ExecContext{exec, state^})
+        }
     } else {
         exec(state_string(state^), state.exec_data)
     }
 }
 
 parser_exec_from_parser :: proc(state: ^ParserState, parser: Parser) {
-    if state.defered_exec {
-        append(state.exec_list, ExecContext{parser.exec, state^})
+    if state.recursion_count > 0 {
+        if parser.exec != default_exec {
+            append(state.exec_list, ExecContext{parser.exec, state^})
+        }
     } else {
         parser_exec_from_proc(state, parser.exec)
     }

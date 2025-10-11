@@ -382,10 +382,10 @@ lrec :: proc(
         terminal_rule := self.parsers[len(self.parsers) - 1]
         middle_rules := self.parsers[1:len(self.parsers) - 1]
 
-        run_exec := !state.defered_exec
         new_state = parser_skip(state, self.skip)
-        new_state.defered_exec = true
         exec_list_len := len(state.exec_list)
+
+        new_state.recursion_count += 1
 
         // apply the terminal rule
         if new_state, err = parser_parse(new_state, terminal_rule); err != nil {
@@ -398,6 +398,7 @@ lrec :: proc(
         }
 
         // middle rules
+        // new_state.recursion_count += 1
         for parser in middle_rules {
             if new_state, err = parser_parse(new_state, parser); err != nil {
                 remove_range(new_state.exec_list, exec_list_len, len(new_state.exec_list))
@@ -406,20 +407,27 @@ lrec :: proc(
             new_state = parser_skip(new_state, self.skip)
         }
 
+        // ISSUE:
+        // when designing arithmetic operators with this, it is impossible to
+        // get the correct content. Furthermore, the operands do not appear in
+        // order (the right hand side is pased after), however, it makes things
+        // consistend. Otherwise, we can inject the operator at the right place
+        // at the end of this function, however, this will also require doing
+        // the same thing in all other functions.
+        parser_exec(&new_state, self.exec)
+
         // recurse
         if new_state, err = parser_parse(new_state, recursive_rule); err != nil {
             remove_range(new_state.exec_list, exec_list_len, len(new_state.exec_list))
             return new_state, err
         }
 
-        new_state.pos = state.pos
-        inject_at(new_state.exec_list, exec_list_len, ExecContext{self.exec, new_state})
-        if run_exec {
+        new_state.recursion_count -= 1
+        if new_state.recursion_count == 0 {
             #reverse for &ctx in new_state.exec_list {
-                parser_exec(ctx);
+                parser_exec(ctx)
             }
             clear(new_state.exec_list)
-            new_state.defered_exec = false
         }
         return new_state, nil
     }

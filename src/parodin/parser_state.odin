@@ -26,7 +26,7 @@ ParserState :: struct {
     loc: Location,
     exec_data: rawptr,
     exec_list: ^[dynamic]ExecContext,
-    defered_exec: bool,
+    recursion_count: int,
 }
 
 state_create :: proc(content: ^string, exec_data: rawptr) -> ParserState {
