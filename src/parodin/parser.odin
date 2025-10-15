@@ -19,6 +19,10 @@ ParserError :: union {
     InternalError,
 }
 
+// TODO:
+// It would be better if the content could be the result of the sub rules (could it even be variadic?)
+// ContentType :: union {string, rawptr}
+// exec(r1, r2, ..., rn, exec_data)
 ExecProc :: proc(content: string, exec_data: rawptr)
 
 PredProc :: proc(c: rune) -> bool
@@ -98,10 +102,11 @@ parser_skip :: proc {
 }
 
 parser_exec_from_proc :: proc(state: ^ParserState, exec: ExecProc) {
+    if exec == nil {
+        return
+    }
     if state.rd.depth > 0 {
-        if exec != default_exec {
             append(&state.rd.current_node.execs, ExecContext{exec, state^})
-        }
     } else {
         exec(state_string(state), state.exec_data)
     }

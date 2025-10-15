@@ -6,9 +6,6 @@ import "core:slice"
 
 // default parser functions ////////////////////////////////////////////////////
 
-// TODO: the default should be nil
-default_exec :: proc(content: string, exec_data: rawptr) {}
-
 test_exec :: proc($message: string) -> ExecProc {
     return proc(content: string, exec_data: rawptr) {
         fmt.printfln("test_exec: {} (content = `{}')", message, content)
@@ -28,7 +25,7 @@ SKIP := default_skip
 declare :: proc(
     name: string = "parser",
     skip: PredProc = SKIP,
-    exec: ExecProc = default_exec,
+    exec: ExecProc = nil,
 ) -> ^Parser {
     parse := proc(self: ^Parser, state: ^ParserState) -> (err: ParserError) {
         if len(self.parsers) == 0 || self.parsers[0] == nil {
@@ -55,7 +52,7 @@ define :: proc(parser: ^Parser, impl: ^Parser) {
     if parser.parsers[0] != nil {
         fmt.printfln("error: redifinition of parser {}.", parser.name)
     }
-    if parser.exec != default_exec && impl.exec == default_exec {
+    if parser.exec != nil && impl.exec == nil {
         impl.exec = parser.exec
     }
     parser.parsers[0] = impl
@@ -65,14 +62,14 @@ empty :: proc() -> ^Parser {
     parse := proc(self: ^Parser, state: ^ParserState) -> (err: ParserError) {
         return nil
     }
-    return parser_create("emtpy", parse, SKIP, default_exec)
+    return parser_create("emtpy", parse, SKIP, nil)
 }
 
 // TODO: create a better error message for rules that use cond
 cond :: proc(
     pred: PredProc,
     skip: PredProc = SKIP,
-    exec: ExecProc = default_exec,
+    exec: ExecProc = nil,
     name: string = "cond",
 ) -> ^Parser {
     parse := proc(self: ^Parser, state: ^ParserState) -> (err: ParserError) {
@@ -99,7 +96,7 @@ cond :: proc(
 one_of :: proc(
     $chars: string,
     skip: PredProc = SKIP,
-    exec: ExecProc = default_exec,
+    exec: ExecProc = nil,
     name: string = "one_of",
 ) -> ^Parser {
     return cond(proc(c: rune) -> bool {
@@ -111,7 +108,7 @@ range :: proc(
     $c1: rune,
     $c2: rune,
     skip: PredProc = SKIP,
-    exec: ExecProc = default_exec,
+    exec: ExecProc = nil,
     name: string = "range",
 ) -> ^Parser {
     return cond(proc(c: rune) -> bool {
@@ -122,7 +119,7 @@ range :: proc(
 lit_c :: proc(
     $char: rune,
     skip: PredProc = SKIP,
-    exec: ExecProc = default_exec,
+    exec: ExecProc = nil,
     name: string = "lit_c",
 ) -> ^Parser {
     return cond(proc(c: rune) -> bool {
@@ -133,7 +130,7 @@ lit_c :: proc(
 lit :: proc(
     $str: string,
     skip: PredProc = SKIP,
-    exec: ExecProc = default_exec,
+    exec: ExecProc = nil,
     name: string = "lit",
 ) -> ^Parser {
     parse := proc(self: ^Parser, state: ^ParserState) -> (err: ParserError) {
@@ -158,7 +155,7 @@ lit :: proc(
 single :: proc(
     parser: ^Parser,
     skip: PredProc = SKIP,
-    exec: ExecProc = default_exec,
+    exec: ExecProc = nil,
     name: string = "single",
 ) -> ^Parser {
     parse := proc(self: ^Parser, state: ^ParserState) -> (err: ParserError) {
@@ -178,7 +175,7 @@ single :: proc(
 star :: proc(
     parser: ^Parser,
     skip: PredProc = SKIP,
-    exec: ExecProc = default_exec,
+    exec: ExecProc = nil,
     name: string = "star",
 ) -> ^Parser {
     parse := proc(self: ^Parser, state: ^ParserState) -> (err: ParserError) {
@@ -201,7 +198,7 @@ star :: proc(
 plus :: proc(
     parser: ^Parser,
     skip: PredProc = SKIP,
-    exec: ExecProc = default_exec,
+    exec: ExecProc = nil,
     name: string = "plus",
 ) -> ^Parser {
     parse := proc(self: ^Parser, state: ^ParserState) -> (err: ParserError) {
@@ -229,7 +226,7 @@ times :: proc(
     $nb_times: int,
     parser: ^Parser,
     skip: PredProc = SKIP,
-    exec: ExecProc = default_exec,
+    exec: ExecProc = nil,
     name: string = "times",
 ) -> ^Parser {
     parse := proc(self: ^Parser, state: ^ParserState) -> (err: ParserError) {
@@ -260,7 +257,7 @@ times :: proc(
 seq :: proc(
     parsers: ..^Parser,
     skip: PredProc = SKIP,
-    exec: ExecProc = default_exec,
+    exec: ExecProc = nil,
     name: string = "seq",
 ) -> ^Parser {
     parse := proc(self: ^Parser, state: ^ParserState) -> (err: ParserError) {
@@ -300,7 +297,7 @@ seq :: proc(
 or :: proc(
     parsers: ..^Parser,
     skip: PredProc = SKIP,
-    exec: ExecProc = default_exec,
+    exec: ExecProc = nil,
     name: string = "or",
 ) -> ^Parser {
     parse := proc(self: ^Parser, state: ^ParserState) -> (err: ParserError) {
@@ -327,7 +324,7 @@ or :: proc(
 opt :: proc(
     parser: ^Parser,
     skip: PredProc = SKIP,
-    exec: ExecProc = default_exec,
+    exec: ExecProc = nil,
     name: string = "opt",
 ) -> ^Parser {
     parse := proc(self: ^Parser, state: ^ParserState) -> (err: ParserError) {
@@ -370,7 +367,7 @@ opt :: proc(
 lrec :: proc(
     parsers: ..^Parser,
     skip: PredProc = SKIP,
-    exec: ExecProc = default_exec,
+    exec: ExecProc = nil,
     name: string = "lrec",
 ) -> ^Parser {
     parse := proc(self: ^Parser, state: ^ParserState) -> (err: ParserError) {
