@@ -19,14 +19,51 @@ ExecContext :: struct {
     state: ParserState,
 }
 
+ExecTree :: struct {
+    lhs: ^ExecTree,
+    rhs: ^ExecTree,
+    execs: [dynamic]ExecContext,
+}
+
+exec_tree_exec :: proc(tree: ^ExecTree, lvl := 0) {
+    if tree == nil {
+        return
+    }
+
+    #reverse for &ctx in tree.execs {
+        for j in 0..<lvl {
+            fmt.print("|  ")
+        }
+        parser_exec(&ctx)
+    }
+    exec_tree_exec(tree.lhs, lvl + 1)
+    exec_tree_exec(tree.rhs, lvl + 1)
+    if tree.lhs != nil || tree.rhs != nil {
+        for i in 0..<lvl {
+            fmt.print("|  ")
+        }
+        fmt.print("+---\n")
+    }
+}
+
+RecursionData :: struct {
+    exec_trees: map[^Parser]^ExecTree,
+    current_node: ^ExecTree,
+    depth: u64, // depth per recursive rules???
+}
+
 ParserState :: struct {
     content: ^string,
     pos: int,
     cur: int,
     loc: Location,
     exec_data: rawptr,
-    exec_list: ^[dynamic]ExecContext,
-    recursion_count: int,
+    rd: RecursionData,
+}
+
+state_set :: proc(dest: ^ParserState, src: ^ParserState) {
+    dest.cur = src.cur
+    dest.rd = src.rd
 }
 
 state_create :: proc(content: ^string, exec_data: rawptr) -> ParserState {
@@ -36,35 +73,31 @@ state_create :: proc(content: ^string, exec_data: rawptr) -> ParserState {
         cur = 0,
         loc = Location{1, 1, ""},
         exec_data = exec_data,
-        exec_list = new([dynamic]ExecContext)
     }
 }
 
 state_destroy :: proc(state: ParserState) {
-    free(state.exec_list)
 }
 
-state_eat_one :: proc(state: ParserState) -> (new_state: ParserState, ok: bool) {
-    if state.cur >= len(state.content^) do return state, false
-    new_state = state
+state_eat_one :: proc(state: ^ParserState) -> (ok: bool) {
+    if state.cur >= len(state.content^) do return false
     if state_char(state) == '\n' {
-        new_state.loc.row += 1
-        new_state.loc.col = 0
+        state.loc.row += 1
+        state.loc.col = 0
     }
-    new_state.cur += 1
-    new_state.loc.col += 1
-    return new_state, true
+    state.cur += 1
+    state.loc.col += 1
+    return true
 }
 
-state_advance :: proc(state: ParserState) -> (new_state: ParserState, ok: bool) {
-    if state.cur >= len(state.content^) do return state, false
-    new_state = state
-    new_state.cur += 1
-    new_state.pos += 1
-    return new_state, true
+state_advance :: proc(state: ^ParserState) -> (ok: bool) {
+    if state.cur >= len(state.content^) do return false
+    state.cur += 1
+    state.pos += 1
+    return true
 }
 
-state_eof :: proc(state: ParserState) -> bool {
+state_eof :: proc(state: ^ParserState) -> bool {
     return state.cur >= len(state.content^)
 }
 
@@ -72,26 +105,26 @@ state_save_pos :: proc(state: ^ParserState) {
     state.pos = state.cur
 }
 
-state_char_at :: proc(state: ParserState, idx: int) -> rune {
+state_char_at :: proc(state: ^ParserState, idx: int) -> rune {
     return utf8.rune_at_pos(state.content^, idx)
 }
 
-state_char :: proc(state: ParserState) -> rune {
+state_char :: proc(state: ^ParserState) -> rune {
     return state_char_at(state, state.cur)
 }
 
-state_string_at :: proc(state: ParserState, begin: int, end: int) -> string {
+state_string_at :: proc(state: ^ParserState, begin: int, end: int) -> string {
     // TODO: how to deal with an error here?
     result, _ := strings.substring(state.content^, begin, end)
     return result
 }
 
-state_string :: proc(state: ParserState) -> string {
+state_string :: proc(state: ^ParserState) -> string {
     return state_string_at(state, state.pos, state.cur)
 }
 
 @(private="file")
-find_line_start :: proc(state: ParserState) -> int {
+find_line_start :: proc(state: ^ParserState) -> int {
     cur := min(state.cur, len(state.content^) - 1)
     for i := cur; i >= 0; i -= 1 {
         if state_char_at(state, i) == '\n' do return i
@@ -100,7 +133,7 @@ find_line_start :: proc(state: ParserState) -> int {
 }
 
 @(private="file")
-find_line_end :: proc(state: ParserState) -> int {
+find_line_end :: proc(state: ^ParserState) -> int {
     for i := state.cur; i < len(state.content^); i += 1 {
         if state_char_at(state, i) == '\n' do return i
     }
@@ -114,7 +147,7 @@ indent :: proc(n: int) {
     }
 }
 
-state_print_context :: proc(state: ParserState) {
+state_print_context :: proc(state: ^ParserState) {
     begin := find_line_start(state)
     end := find_line_end(state)
     row_bytes: [10]u8

@@ -57,6 +57,8 @@ parse_number :: proc() -> ^parodin.Parser {
 // TODO: print the parser.
 
 test_parser :: proc(name: string, parser: ^parodin.Parser, str: string) {
+    fmt.printf("\n=============================================\n")
+
     ctx: ExecContext
     state, ok := parodin.parse_string(parser, str, exec_data = &ctx)
     defer parodin.state_destroy(state)

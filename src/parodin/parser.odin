@@ -23,7 +23,7 @@ ExecProc :: proc(content: string, exec_data: rawptr)
 
 PredProc :: proc(c: rune) -> bool
 
-ParseProc :: proc(self: ^Parser, state: ParserState) -> (new_state: ParserState, err: ParserError)
+ParseProc :: proc(self: ^Parser, state: ^ParserState) -> (err: ParserError)
 
 Parser :: struct {
     rc: u32,
@@ -76,19 +76,19 @@ parser_destroy :: proc(parser: ^Parser) {
     free(parser)
 }
 
-parser_parse :: proc(state: ParserState, parser: ^Parser) -> (new_state: ParserState, err: ParserError) {
+parser_parse :: proc(state: ^ParserState, parser: ^Parser) -> (err: ParserError) {
     return parser->parse(state)
 }
 
-parser_skip_from_proc :: proc(state: ParserState, parser_skip: PredProc) -> ParserState {
+parser_skip_from_proc :: proc(state: ^ParserState, parser_skip: PredProc) -> ^ParserState {
     state := state
     for state.cur < len(state.content) && parser_skip(state_char(state)) {
-        state = state_advance(state) or_break
+        state_advance(state) or_break
     }
     return state
 }
 
-parser_skip_from_parser :: proc(state: ParserState, parser: Parser) -> ParserState {
+parser_skip_from_parser :: proc(state: ^ParserState, parser: Parser) -> ^ParserState {
     return parser_skip_from_proc(state, parser.skip)
 }
 
@@ -98,27 +98,21 @@ parser_skip :: proc {
 }
 
 parser_exec_from_proc :: proc(state: ^ParserState, exec: ExecProc) {
-    if state.recursion_count > 0 {
+    if state.rd.depth > 0 {
         if exec != default_exec {
-            append(state.exec_list, ExecContext{exec, state^})
+            append(&state.rd.current_node.execs, ExecContext{exec, state^})
         }
     } else {
-        exec(state_string(state^), state.exec_data)
+        exec(state_string(state), state.exec_data)
     }
 }
 
 parser_exec_from_parser :: proc(state: ^ParserState, parser: Parser) {
-    if state.recursion_count > 0 {
-        if parser.exec != default_exec {
-            append(state.exec_list, ExecContext{parser.exec, state^})
-        }
-    } else {
-        parser_exec_from_proc(state, parser.exec)
-    }
+    parser_exec_from_proc(state, parser.exec)
 }
 
-parser_exec_from_exec_context :: proc(ctx: ExecContext) {
-    ctx.exec(state_string(ctx.state), ctx.state.exec_data)
+parser_exec_from_exec_context :: proc(ctx: ^ExecContext) {
+    ctx.exec(state_string(&ctx.state), ctx.state.exec_data)
 }
 
 parser_exec :: proc {
@@ -133,7 +127,7 @@ parse_string :: proc(
     parser: ^Parser,
     str: string,
     exec_data: rawptr = nil,
-) -> (new_state: ParserState, ok: bool) {
+) -> (state: ParserState, ok: bool) {
     // create the arena for the temporary allocations (error messages)
     bytes: [4096]u8
     arena: mem.Arena
@@ -141,26 +135,27 @@ parse_string :: proc(
     context.temp_allocator = mem.arena_allocator(&arena)
 
     // execute the given parser on the string and print error
-    err: ParserError
     str := str
-    new_state, err = parser_parse(state_create(&str, exec_data), parser)
+    state = state_create(&str, exec_data)
+    err := parser_parse(&state, parser)
 
+    ok = true
     if err != nil {
         switch e in err {
         case SyntaxError:
             fmt.printfln("syntax error: {}", e.message)
-            state_print_context(new_state)
+            state_print_context(&state)
         case InternalError:
             fmt.printfln("internal error: {}", e.message)
         }
         ok = false
-    } else if !state_eof(new_state) {
+    } else if !state_eof(&state) {
         fmt.printfln("syntax error: the parser did not consume all the string.")
-        state_print_context(new_state)
+        state_print_context(&state)
         ok = false
     }
     free_all(context.temp_allocator)
-    return new_state, true
+    return state, ok
 }
 
 // print grammar ///////////////////////////////////////////////////////////////

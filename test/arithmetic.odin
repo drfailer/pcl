@@ -152,6 +152,9 @@ main :: proc() {
     arithmetic_parser := arithmetic_grammar()
     defer parodin.parser_destroy(arithmetic_parser)
 
+    // str := "1"
+    // str := "2 + 3"
+    // str := "2 + 3 - 1"
     str := "(1 - 2) - 3*3 + 4/2"
     fmt.println(str)
     state, ok := parodin.parse_string(arithmetic_parser, str, &ed)
