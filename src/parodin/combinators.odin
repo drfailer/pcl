@@ -127,7 +127,7 @@ lit_c :: proc(
     }, skip, exec, name)
 }
 
-lit :: proc(
+lit_str :: proc(
     $str: string,
     skip: PredProc = SKIP,
     exec: ExecProc = nil,
@@ -149,6 +149,8 @@ lit :: proc(
     }
     return parser_create(name, parse, skip, exec)
 }
+
+lit :: proc { lit_c, lit_str }
 
 // TODO regex rule
 

@@ -121,17 +121,17 @@ arithmetic_grammar :: proc() -> ^parodin.Parser {
     digits := plus(range('0', '9'), name = "digits")
 
     ints := single(digits, name = "ints", exec = exec_ints)
-    floats := seq(digits, lit_c('.'), opt(digits), name = "floats", exec = exec_floats)
-    parent := seq(lit_c('('), expr, lit_c(')'), name = "parent", exec = exec_parent)
+    floats := seq(digits, lit('.'), opt(digits), name = "floats", exec = exec_floats)
+    parent := seq(lit('('), expr, lit(')'), name = "parent", exec = exec_parent)
     factor := or(floats, ints, parent, name = "factor")
 
     term := declare(name = "term")
-    mul := lrec(term, lit_c('*'), factor, exec = proc(content: string, exec_data: rawptr) { exec_operator(content, exec_data, .Mul) })
-    div := lrec(term, lit_c('/'), factor, exec = proc(content: string, exec_data: rawptr) { exec_operator(content, exec_data, .Div) })
+    mul := lrec(term, lit('*'), factor, exec = proc(content: string, exec_data: rawptr) { exec_operator(content, exec_data, .Mul) })
+    div := lrec(term, lit('/'), factor, exec = proc(content: string, exec_data: rawptr) { exec_operator(content, exec_data, .Div) })
     define(term, or(mul, div, factor))
 
-    add := lrec(expr, lit_c('+'), term, exec = proc(content: string, exec_data: rawptr) { exec_operator(content, exec_data, .Add) })
-    sub := lrec(expr, lit_c('-'), term, exec = proc(content: string, exec_data: rawptr) { exec_operator(content, exec_data, .Sub) })
+    add := lrec(expr, lit('+'), term, exec = proc(content: string, exec_data: rawptr) { exec_operator(content, exec_data, .Add) })
+    sub := lrec(expr, lit('-'), term, exec = proc(content: string, exec_data: rawptr) { exec_operator(content, exec_data, .Sub) })
     define(expr, or(add, sub, term))
 
     return expr
