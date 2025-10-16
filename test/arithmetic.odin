@@ -128,11 +128,11 @@ arithmetic_grammar :: proc() -> ^parodin.Parser {
     term := declare(name = "term")
     mul := lrec(term, lit('*'), factor, exec = proc(content: string, exec_data: rawptr) { exec_operator(content, exec_data, .Mul) })
     div := lrec(term, lit('/'), factor, exec = proc(content: string, exec_data: rawptr) { exec_operator(content, exec_data, .Div) })
-    define(term, or(mul, div, factor))
+    define_rec(term, or(mul, div, factor))
 
     add := lrec(expr, lit('+'), term, exec = proc(content: string, exec_data: rawptr) { exec_operator(content, exec_data, .Add) })
     sub := lrec(expr, lit('-'), term, exec = proc(content: string, exec_data: rawptr) { exec_operator(content, exec_data, .Sub) })
-    define(expr, or(add, sub, term))
+    define_rec(expr, or(add, sub, term))
 
     // FIXME not working???
     // term := declare(name = "term")
@@ -161,11 +161,11 @@ main :: proc() {
     defer parodin.parser_destroy(arithmetic_parser)
 
     // str := "1"
-    // str := "2 + 3"
+    // str := "1 - (2 + 3)"
     // str := "2 + 3 - 1"
     // str := "(1 - 2) - 3*3 + 4/2"
-    str := "(1 - (2 + 3*12.4)) - 3*3 + 4/2" // missing one operator and one value :(
-    // str := "(1 - (2 + 3*12.4)) - 3*3 - (3*4) + 4/2 + (2 + 2)" // the parents on the right cause issues
+    // str := "(1 - (2 + 3*12.4)) - 3*3 + 4/2" // missing one operator and one value :(
+    str := "(1 - (2 + 3*12.4)) - 3*3 - (3*4) + 4/2 + (2 + 2)" // the parents on the right cause issues
     fmt.println(str)
     state, ok := parodin.parse_string(arithmetic_parser, str, &ed)
     fmt.printfln("{}, {}", state, ok);
