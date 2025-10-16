@@ -16,8 +16,6 @@ default_skip :: proc(c: rune) -> bool {
     return false
 }
 
-// default parser functions ////////////////////////////////////////////////////
-
 SKIP := default_skip
 
 // combinators /////////////////////////////////////////////////////////////////
@@ -56,11 +54,6 @@ define :: proc(parser: ^Parser, impl: ^Parser) {
         impl.exec = parser.exec
     }
     parser.parsers[0] = impl
-}
-
-// Hack to reset the context when using left recursion
-define_rec :: proc(parser: ^Parser, impl: ^Parser) {
-    define(parser, rec_impl(parser, impl))
 }
 
 empty :: proc() -> ^Parser {
@@ -377,16 +370,12 @@ lrec :: proc(
     exec: ExecProc = nil,
     name: string = "lrec",
 ) -> ^Parser {
-    // TODO: abort if the recursive rules wasn't defined with define_rec
     parse := proc(self: ^Parser, state: ^ParserState) -> (err: ParserError) {
         recursive_rule := self.parsers[0]
         terminal_rule := self.parsers[len(self.parsers) - 1]
         middle_rules := self.parsers[1:len(self.parsers) - 1]
 
-        // TODO: allocating here avoids having extra exec in the list. clearing
-        //       doesn't work for a mysterious reason...
         state.rd.current_node = new(ExecTree)
-        // clear(&state.rd.current_node.execs)
 
         state.rd.depth += 1
 
@@ -396,13 +385,18 @@ lrec :: proc(
             return err
         }
 
+        if recursive_rule in state.rd.exec_trees {
+            state.rd.exec_trees[recursive_rule].rhs = state.rd.current_node
+            state.rd.current_node = state.rd.exec_trees[recursive_rule]
+        }
+
         // success if eof and no operator
         parser_skip(state, self.skip)
         if state_eof(state) && len(middle_rules) == 0 {
+            delete_key(&state.rd.exec_trees, recursive_rule)
             return nil
         }
 
-        // prepare the new node
         node := new(ExecTree)
         node.lhs = state.rd.current_node
         state.rd.current_node = node
@@ -418,6 +412,8 @@ lrec :: proc(
         parser_exec(state, self.exec)
         state.rd.exec_trees[recursive_rule] = node
 
+        state.rd.current_node = new(ExecTree)
+
         // apply recursive rule
         if err = parser_parse(state, recursive_rule); err != nil {
             return err
@@ -426,11 +422,14 @@ lrec :: proc(
         state.rd.depth -= 1
         if recursive_rule in state.rd.exec_trees {
             state.rd.current_node = state.rd.exec_trees[recursive_rule]
+            delete_key(&state.rd.exec_trees, recursive_rule)
         }
 
         if state.rd.depth == 0 {
+            fmt.println("print tree:")
+            exec_tree_print(state.rd.current_node)
             fmt.println("exec tree:")
-            exec_tree_exec(state.rd.current_node)
+            parser_exec_from_exec_tree(state.rd.current_node)
             state.rd.current_node = nil
             clear(&state.rd.exec_trees)
         }
@@ -439,43 +438,15 @@ lrec :: proc(
     return parser_create(name, parse, skip, exec, parsers = parsers)
 }
 
-@(private="file")
-rec_impl :: proc(parser: ^Parser, impl: ^Parser) -> ^Parser {
-    parse := proc(self: ^Parser, state: ^ParserState) -> (err: ParserError) {
-        recursive_rule := self.parsers[0]
-        impl := self.parsers[1]
-
-        node := new(ExecTree)
-        rd := state.rd
-        state.rd.exec_trees = map[^Parser]^ExecTree{}
-        state.rd.current_node = node
-
-        if err = parser_parse(state, impl); err != nil {
-            free(node)
-            return err
-        }
-
-        if recursive_rule in rd.exec_trees {
-            rd.exec_trees[recursive_rule].rhs = state.rd.current_node
-            state.rd.exec_trees[recursive_rule] = rd.exec_trees[recursive_rule]
-        }
-
-        return nil
-    }
-    return parser_create("rec_impl", parse, nil, nil, parsers = []^Parser{parser, impl})
-}
-
 rec :: proc(parser: ^Parser) -> ^Parser {
     parse := proc(self: ^Parser, state: ^ParserState) -> (err: ParserError) {
         recursive_rule := self.parsers[0]
 
-        node := new(ExecTree)
         rd := state.rd
-        state.rd.exec_trees = map[^Parser]^ExecTree{}
-        state.rd.current_node = node
+        state.rd = RecursionData{}
+        state.rd.depth = rd.depth
 
         if err = parser_parse(state, self.parsers[0]); err != nil {
-            free(node)
             return err
         }
 

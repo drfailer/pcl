@@ -73,38 +73,44 @@ node_print :: proc(node: Node, lvl: int = 0) {
 
 // TODO: create a proper ast and proper tests
 
-exec_ints :: proc(content: string, exec_data: rawptr) {
-    fmt.printfln("value: {}", content)
+exec_ints :: proc(content: []parodin.ParseResult, exec_data: rawptr) -> parodin.ParseResult {
+    fmt.printfln("value: {}", content[0].(string))
     // ed := cast(^ExecData)exec_data
     // node := new(Value)
     // node^ = cast(i32)strconv.atoi(content)
     // append(&ed.nodes, node)
+    return nil
 }
 
-exec_floats :: proc(content: string, exec_data: rawptr) {
-    fmt.printfln("value: {}", content)
+exec_floats :: proc(content: []parodin.ParseResult, exec_data: rawptr) -> parodin.ParseResult {
+    fmt.printfln("value: {}", content[0].(string))
     // ed := cast(^ExecData)exec_data
     // node := new(Value)
     // node^ = cast(f32)strconv.atof(content)
     // append(&ed.nodes, node)
+    return nil
 }
 
-exec_operator :: proc(content: string, exec_data: rawptr, op: Operator) {
-    fmt.printfln("operator({}): {}", op, content)
-    // ed := cast(^ExecData)exec_data
-    // node := new(Operation)
-    // node.kind = op
-    // node.rhs = pop(&ed.nodes)
-    // node.lhs = pop(&ed.nodes)
-    // append(&ed.nodes, node)
+exec_operator :: proc($op: Operator) -> parodin.ExecProc {
+    return proc(content: []parodin.ParseResult, exec_data: rawptr) -> parodin.ParseResult {
+        fmt.printfln("operator({}): {}", op, content[0].(string))
+        // ed := cast(^ExecData)exec_data
+        // node := new(Operation)
+        // node.kind = op
+        // node.rhs = pop(&ed.nodes)
+        // node.lhs = pop(&ed.nodes)
+        // append(&ed.nodes, node)
+        return nil
+    }
 }
 
-exec_parent :: proc(content: string, exec_data: rawptr) {
-    fmt.printfln("parent: {}", content)
+exec_parent :: proc(content: []parodin.ParseResult, exec_data: rawptr) -> parodin.ParseResult {
+    fmt.printfln("parent: {}", content[0].(string))
     // ed := cast(^ExecData)exec_data
     // node := new(Parent)
     // node.content = pop(&ed.nodes)
     // append(&ed.nodes, node)
+    return nil
 }
 
 skip_spaces :: proc(char: rune) -> bool {
@@ -122,26 +128,17 @@ arithmetic_grammar :: proc() -> ^parodin.Parser {
 
     ints := single(digits, name = "ints", exec = exec_ints)
     floats := seq(digits, lit('.'), opt(digits), name = "floats", exec = exec_floats)
-    parent := seq(lit('('), expr, lit(')'), name = "parent", exec = exec_parent)
+    parent := seq(lit('('), rec(expr), lit(')'), name = "parent", exec = exec_parent)
     factor := or(floats, ints, parent, name = "factor")
 
     term := declare(name = "term")
-    mul := lrec(term, lit('*'), factor, exec = proc(content: string, exec_data: rawptr) { exec_operator(content, exec_data, .Mul) })
-    div := lrec(term, lit('/'), factor, exec = proc(content: string, exec_data: rawptr) { exec_operator(content, exec_data, .Div) })
-    define_rec(term, or(mul, div, factor))
+    mul := lrec(term, lit('*'), factor, exec = exec_operator(.Mul))
+    div := lrec(term, lit('/'), factor, exec = exec_operator(.Div))
+    define(term, or(mul, div, factor))
 
-    add := lrec(expr, lit('+'), term, exec = proc(content: string, exec_data: rawptr) { exec_operator(content, exec_data, .Add) })
-    sub := lrec(expr, lit('-'), term, exec = proc(content: string, exec_data: rawptr) { exec_operator(content, exec_data, .Sub) })
-    define_rec(expr, or(add, sub, term))
-
-    // FIXME not working???
-    // term := declare(name = "term")
-    // mul_div := lrec(term, or(lit('*'), lit('/')), factor, exec = proc(content: string, exec_data: rawptr) { exec_operator(content, exec_data, .Mul) })
-    // define(term, or(mul_div, factor))
-    //
-    // add_sub := lrec(expr, or(lit('+'), lit('/')), term, exec = proc(content: string, exec_data: rawptr) { exec_operator(content, exec_data, .Add) })
-    // define(expr, or(add_sub, term))
-
+    add := lrec(expr, lit('+'), term, exec = exec_operator(.Add))
+    sub := lrec(expr, lit('-'), term, exec = exec_operator(.Sub))
+    define(expr, or(add, sub, term))
     return expr
 }
 
@@ -150,10 +147,10 @@ arithmetic_grammar :: proc() -> ^parodin.Parser {
 // <expr> := <term> <expr'>
 // <expr'> := "+" <term> <expr'> | empty
 //
-// <term> = <factor> <term'>
-// <term'> = "*" <factor> <term'> | emtpy
+// <term> := <factor> <term'>
+// <term'> := "*" <factor> <term'> | emtpy
 //
-// <factor> = <number> | <parent>
+// <factor> := <number> | <parent>
 
 main :: proc() {
     ed: ExecData
