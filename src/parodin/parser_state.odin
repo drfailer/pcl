@@ -123,6 +123,17 @@ state_string :: proc(state: ^ParserState) -> string {
     return state_string_at(state, state.pos, state.cur)
 }
 
+state_cursor_on_string :: proc(state: ^ParserState, $prefix: string) -> bool {
+    state_idx := state.cur
+    for c in prefix {
+        if state_idx > len(state.content) || state.content[state_idx] != c {
+            return false
+        }
+        state_idx += 1
+    }
+    return true
+}
+
 @(private="file")
 find_line_start :: proc(state: ^ParserState) -> int {
     cur := min(state.cur, len(state.content^) - 1)

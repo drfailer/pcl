@@ -489,7 +489,37 @@ rec :: proc(parser: ^Parser) -> ^Parser {
     return parser_create("", parse, nil, nil, parsers = []^Parser{parser})
 }
 
-// will not parse the inside of the block (used for writing preprocessing tool)
-// TODO: block($open: string, $close: string)
+block :: proc(
+    $opening: string,
+    $closing: string,
+    skip: PredProc = SKIP,
+    exec: ExecProc = nil,
+    name: string = "block",
+) -> ^Parser {
+    parse := proc(self: ^Parser, state: ^ParserState) -> (err: ParserError) {
+        parser_skip(state, self.skip)
+        if !state_cursor_on_string(state, opening) {
+            return SyntaxError{"execpted `" + opening + "`"}
+        }
+        state.cur += len(opening)
+        count := 1
 
-// QUESTION: block(open: ^Parser, close: ^Parser) usefull???
+        for count > 0 {
+            if state_eof(state) {
+                return SyntaxError{"failed to parse `block " + opening + " ... " + closing + "`"}
+            }
+            if !state_cursor_on_string(state, opening) {
+                count += 1
+                state.cur += len(opening)
+            } else if !state_cursor_on_string(state, closing) {
+                count -= 1
+            } else {
+                state.cur += len(closing)
+            }
+        }
+        parser_exec(state, self.exec)
+        state_save_pos(state)
+        return nil
+    }
+    return parser_create(name, parse, skip, exec)
+}
