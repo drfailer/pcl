@@ -19,11 +19,17 @@ ParserError :: union {
     InternalError,
 }
 
+ParseResult :: union {
+    string,
+    rawptr,
+}
+
 // TODO:
 // It would be better if the content could be the result of the sub rules (could it even be variadic?)
 // ContentType :: union {string, rawptr}
 // exec(r1, r2, ..., rn, exec_data)
-ExecProc :: proc(content: string, exec_data: rawptr)
+// ExecProc :: proc(content: string, exec_data: rawptr)
+ExecProc :: proc(results: []ParseResult, exec_data: rawptr) -> ParseResult
 
 PredProc :: proc(c: rune) -> bool
 
@@ -98,17 +104,17 @@ parser_skip_from_parser :: proc(state: ^ParserState, parser: Parser) -> ^ParserS
 
 parser_skip :: proc {
     parser_skip_from_proc,
-    parser_exec_from_parser,
 }
 
 parser_exec_from_proc :: proc(state: ^ParserState, exec: ExecProc) {
     if exec == nil {
+        state.parse_result = state_string(state)
         return
     }
     if state.rd.depth > 0 {
-            append(&state.rd.current_node.execs, ExecContext{exec, state^})
+        append(&state.rd.current_node.execs, ExecContext{exec, state^})
     } else {
-        exec(state_string(state), state.exec_data)
+        state.parse_result = exec([]ParseResult{state_string(state)}, state.exec_data)
     }
 }
 
@@ -116,14 +122,20 @@ parser_exec_from_parser :: proc(state: ^ParserState, parser: Parser) {
     parser_exec_from_proc(state, parser.exec)
 }
 
-parser_exec_from_exec_context :: proc(ctx: ^ExecContext) {
-    ctx.exec(state_string(&ctx.state), ctx.state.exec_data)
+parser_exec_from_exec_tree :: proc(tree: ^ExecTree) {
+    if tree == nil {
+        return
+    }
+    parser_exec_from_exec_tree(tree.rhs)
+    parser_exec_from_exec_tree(tree.lhs)
+    for &ctx in tree.execs {
+        ctx.exec([]ParseResult{state_string(&ctx.state)}, ctx.state.exec_data)
+    }
 }
 
 parser_exec :: proc {
     parser_exec_from_proc,
     parser_exec_from_parser,
-    parser_exec_from_exec_context,
 }
 
 // parse api ///////////////////////////////////////////////////////////////////

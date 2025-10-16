@@ -25,7 +25,7 @@ ExecTree :: struct {
     execs: [dynamic]ExecContext,
 }
 
-exec_tree_exec :: proc(tree: ^ExecTree, lvl := 0) {
+exec_tree_print :: proc(tree: ^ExecTree, lvl := 0) {
     if tree == nil {
         return
     }
@@ -34,10 +34,10 @@ exec_tree_exec :: proc(tree: ^ExecTree, lvl := 0) {
         for j in 0..<lvl {
             fmt.print("|  ")
         }
-        parser_exec(&ctx)
+        ctx.exec([]ParseResult{state_string(&ctx.state)}, ctx.state.exec_data)
     }
-    exec_tree_exec(tree.lhs, lvl + 1)
-    exec_tree_exec(tree.rhs, lvl + 1)
+    exec_tree_print(tree.lhs, lvl + 1)
+    exec_tree_print(tree.rhs, lvl + 1)
     if tree.lhs != nil || tree.rhs != nil {
         for i in 0..<lvl {
             fmt.print("|  ")
@@ -58,6 +58,7 @@ ParserState :: struct {
     cur: int,
     loc: Location,
     exec_data: rawptr,
+    parse_result: ParseResult,
     rd: RecursionData,
 }
 
