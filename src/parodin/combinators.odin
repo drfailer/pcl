@@ -443,8 +443,7 @@ rec :: proc(parser: ^Parser) -> ^Parser {
         recursive_rule := self.parsers[0]
 
         rd := state.rd
-        state.rd = RecursionData{}
-        state.rd.depth = rd.depth
+        state.rd.exec_trees = map[^Parser]^ExecTree{}
 
         if err = parser_parse(state, self.parsers[0]); err != nil {
             return err
