@@ -387,6 +387,7 @@ lrec :: proc(
 
         if recursive_rule in state.rd.exec_trees {
             state.rd.exec_trees[recursive_rule].rhs = state.rd.current_node
+            state.rd.exec_trees[recursive_rule].execs[0].state.cur = state.pos
             state.rd.current_node = state.rd.exec_trees[recursive_rule]
         }
 
@@ -410,6 +411,7 @@ lrec :: proc(
         }
 
         parser_exec(state, self.exec)
+        node.execs[0].state.pos = node.lhs.execs[0].state.pos
         state.rd.exec_trees[recursive_rule] = node
 
         state.rd.current_node = new(ExecTree)

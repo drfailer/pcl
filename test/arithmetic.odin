@@ -26,6 +26,17 @@ Parent :: struct {
     content: Node,
 }
 
+FunctionId :: enum {
+    Sin,
+    Cos,
+    Tan,
+}
+
+Function :: struct {
+    expr: Node,
+    kind: FunctionId,
+}
+
 Node :: union {
     ^Value,
     ^Operation,
@@ -104,6 +115,19 @@ exec_operator :: proc($op: Operator) -> parodin.ExecProc {
     }
 }
 
+exec_function :: proc($function: FunctionId) -> parodin.ExecProc {
+    return proc(content: []parodin.ParseResult, exec_data: rawptr) -> parodin.ParseResult {
+        fmt.printfln("function({}): {}", function, content[0].(string))
+        // ed := cast(^ExecData)exec_data
+        // node := new(Operation)
+        // node.kind = op
+        // node.rhs = pop(&ed.nodes)
+        // node.lhs = pop(&ed.nodes)
+        // append(&ed.nodes, node)
+        return nil
+    }
+}
+
 exec_parent :: proc(content: []parodin.ParseResult, exec_data: rawptr) -> parodin.ParseResult {
     fmt.printfln("parent: {}", content[0].(string))
     // ed := cast(^ExecData)exec_data
@@ -129,7 +153,11 @@ arithmetic_grammar :: proc() -> ^parodin.Parser {
     ints := single(digits, name = "ints", exec = exec_ints)
     floats := seq(digits, lit('.'), opt(digits), name = "floats", exec = exec_floats)
     parent := seq(lit('('), rec(expr), lit(')'), name = "parent", exec = exec_parent)
-    factor := or(floats, ints, parent, name = "factor")
+    sin := seq(lit("sin"), parent, exec = exec_function(.Sin))
+    cos := seq(lit("cos"), parent, exec = exec_function(.Cos))
+    tan := seq(lit("tan"), parent, exec = exec_function(.Tan))
+    functions := or(cos, sin, tan)
+    factor := or(floats, ints, parent, functions, name = "factor")
 
     term := declare(name = "term")
     mul := lrec(term, lit('*'), factor, exec = exec_operator(.Mul))
@@ -162,7 +190,8 @@ main :: proc() {
     // str := "2 + 3 - 1"
     // str := "(1 - 2) - 3*3 + 4/2"
     // str := "(1 - (2 + 3*12.4)) - 3*3 + 4/2" // missing one operator and one value :(
-    str := "(1 - (2 + 3*12.4)) - 3*3 - (3*4) + 4/2 + (2 + 2)" // the parents on the right cause issues
+    // str := "(1 - (2 + 3*12.4)) - 3*3 - (3*4) + 4/2 + (2 + 2)" // the parents on the right cause issues
+    str := "sin(1 - (2 + 3*12.4)) - 3*3 - cos(3*4) + 4/2 + (2 + 2)" // the parents on the right cause issues
     fmt.println(str)
     state, ok := parodin.parse_string(arithmetic_parser, str, &ed)
     fmt.printfln("{}, {}", state, ok);
