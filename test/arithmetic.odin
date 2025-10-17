@@ -138,7 +138,7 @@ exec_parent :: proc(content: []parodin.ParseResult, exec_data: rawptr) -> parodi
 }
 
 skip_spaces :: proc(char: rune) -> bool {
-    return u8(char) == ' '
+    return u8(char) == ' ' || u8(char) == '\n'
 }
 
 arithmetic_grammar :: proc() -> ^parodin.Parser {

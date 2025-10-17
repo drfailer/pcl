@@ -63,6 +63,7 @@ ParserState :: struct {
 }
 
 state_set :: proc(dest: ^ParserState, src: ^ParserState) {
+    dest.loc = src.loc
     dest.cur = src.cur
     dest.rd = src.rd
 }
@@ -84,18 +85,17 @@ state_eat_one :: proc(state: ^ParserState) -> (ok: bool) {
     if state.cur >= len(state.content^) do return false
     if state_char(state) == '\n' {
         state.loc.row += 1
-        state.loc.col = 0
+        state.loc.col = 1
     }
     state.cur += 1
     state.loc.col += 1
     return true
 }
 
-state_advance :: proc(state: ^ParserState) -> (ok: bool) {
-    if state.cur >= len(state.content^) do return false
+state_advance :: proc(state: ^ParserState) {
+    state.loc.col += 1
     state.cur += 1
     state.pos += 1
-    return true
 }
 
 state_eof :: proc(state: ^ParserState) -> bool {
@@ -137,17 +137,13 @@ state_cursor_on_string :: proc(state: ^ParserState, $prefix: string) -> bool {
 
 @(private="file")
 find_line_start :: proc(state: ^ParserState) -> int {
-    cur := min(state.cur, len(state.content^) - 1)
-    for i := cur; i >= 0; i -= 1 {
-        if state_char_at(state, i) == '\n' do return i
-    }
-    return 0
+    return state.cur - (state.loc.col - 2)
 }
 
 @(private="file")
 find_line_end :: proc(state: ^ParserState) -> int {
     for i := state.cur; i < len(state.content^); i += 1 {
-        if state_char_at(state, i) == '\n' do return i
+        if state_char_at(state, i) == '\n' do return i - 1
     }
     return len(state.content^)
 }

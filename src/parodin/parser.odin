@@ -90,16 +90,19 @@ parser_parse :: proc(state: ^ParserState, parser: ^Parser) -> (err: ParserError)
     return parser->parse(state)
 }
 
-parser_skip_from_proc :: proc(state: ^ParserState, parser_skip: PredProc) -> ^ParserState {
+parser_skip_from_proc :: proc(state: ^ParserState, parser_skip: PredProc) {
     state := state
     for state.cur < len(state.content) && parser_skip(state_char(state)) {
-        state_advance(state) or_break
+        if state_char(state) == '\n' {
+            state.loc.row += 1
+            state.loc.col = 1
+        }
+        state_advance(state)
     }
-    return state
 }
 
-parser_skip_from_parser :: proc(state: ^ParserState, parser: Parser) -> ^ParserState {
-    return parser_skip_from_proc(state, parser.skip)
+parser_skip_from_parser :: proc(state: ^ParserState, parser: Parser) {
+    parser_skip_from_proc(state, parser.skip)
 }
 
 parser_skip :: proc {
