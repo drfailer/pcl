@@ -115,7 +115,12 @@ parser_exec_from_proc :: proc(state: ^ParserState, exec: ExecProc) {
         return
     }
     if state.rd.depth > 0 {
-        append(&state.rd.current_node.execs, ExecContext{exec, state^})
+        if state.rd.current_node.ctx.exec != nil {
+            node := new(ExecTree)
+            node.lhs = state.rd.current_node
+            state.rd.current_node = node
+        }
+        state.rd.current_node.ctx = ExecContext{exec, state^}
     } else {
         state.parse_result = exec([]ParseResult{state_string(state)}, state.exec_data)
     }
@@ -131,9 +136,7 @@ parser_exec_from_exec_tree :: proc(tree: ^ExecTree) {
     }
     parser_exec_from_exec_tree(tree.rhs)
     parser_exec_from_exec_tree(tree.lhs)
-    for &ctx in tree.execs {
-        ctx.exec([]ParseResult{state_string(&ctx.state)}, ctx.state.exec_data)
-    }
+    tree.ctx.exec([]ParseResult{state_string(&tree.ctx.state)}, tree.ctx.state.exec_data)
 }
 
 parser_exec :: proc {

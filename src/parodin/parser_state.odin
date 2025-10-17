@@ -22,7 +22,7 @@ ExecContext :: struct {
 ExecTree :: struct {
     lhs: ^ExecTree,
     rhs: ^ExecTree,
-    execs: [dynamic]ExecContext,
+    ctx: ExecContext,
 }
 
 exec_tree_print :: proc(tree: ^ExecTree, lvl := 0) {
@@ -30,12 +30,10 @@ exec_tree_print :: proc(tree: ^ExecTree, lvl := 0) {
         return
     }
 
-    #reverse for &ctx in tree.execs {
-        for j in 0..<lvl {
-            fmt.print("|  ")
-        }
-        ctx.exec([]ParseResult{state_string(&ctx.state)}, ctx.state.exec_data)
+    for j in 0..<lvl {
+        fmt.print("|  ")
     }
+    tree.ctx.exec([]ParseResult{state_string(&tree.ctx.state)}, tree.ctx.state.exec_data)
     exec_tree_print(tree.lhs, lvl + 1)
     exec_tree_print(tree.rhs, lvl + 1)
     if tree.lhs != nil || tree.rhs != nil {
