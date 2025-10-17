@@ -17,13 +17,13 @@ Value :: union {
 }
 
 Operation :: struct {
-    lhs: Node,
-    rhs: Node,
+    lhs: ^Node,
+    rhs: ^Node,
     kind: Operator,
 }
 
 Parent :: struct {
-    content: Node,
+    expr: ^Node,
 }
 
 FunctionId :: enum {
@@ -33,14 +33,15 @@ FunctionId :: enum {
 }
 
 Function :: struct {
-    expr: Node,
-    kind: FunctionId,
+    id: FunctionId,
+    expr: ^Node,
 }
 
 Node :: union {
-    ^Value,
-    ^Operation,
-    ^Parent,
+    Value,
+    Operation,
+    Parent,
+    Function,
 }
 
 ExecData :: struct {
@@ -55,15 +56,15 @@ print_indent :: proc(lvl: int) {
     }
 }
 
-node_print :: proc(node: Node, lvl: int = 0) {
-    switch n in node {
-    case ^Value:
+node_print :: proc(node: ^Node, lvl: int = 0) {
+    switch n in node^ {
+    case Value:
         print_indent(lvl)
         switch v in n {
         case i32: fmt.printfln("{}", v)
         case f32: fmt.printfln("{}", v)
         }
-    case ^Operation:
+    case Operation:
         node_print(n.rhs, lvl + 1)
         print_indent(lvl)
         switch n.kind {
@@ -73,68 +74,58 @@ node_print :: proc(node: Node, lvl: int = 0) {
         case .Div: fmt.println("/")
         }
         node_print(n.lhs, lvl + 1)
-    case ^Parent:
+    case Parent:
         print_indent(lvl)
         fmt.println("(")
-        node_print(n.content, lvl + 1)
+        node_print(n.expr, lvl + 1)
         print_indent(lvl)
         fmt.println(")")
+    case Function:
+        print_indent(lvl)
+        fmt.printfln("{}", n.id)
+        node_print(n.expr, lvl + 1)
     }
 }
 
 // TODO: create a proper ast and proper tests
 
-exec_ints :: proc(content: []parodin.ParseResult, exec_data: rawptr) -> parodin.ParseResult {
-    fmt.printfln("value: {}", content[0].(string))
-    // ed := cast(^ExecData)exec_data
-    // node := new(Value)
-    // node^ = cast(i32)strconv.atoi(content)
-    // append(&ed.nodes, node)
-    return nil
-}
-
-exec_floats :: proc(content: []parodin.ParseResult, exec_data: rawptr) -> parodin.ParseResult {
-    fmt.printfln("value: {}", content[0].(string))
-    // ed := cast(^ExecData)exec_data
-    // node := new(Value)
-    // node^ = cast(f32)strconv.atof(content)
-    // append(&ed.nodes, node)
-    return nil
+exec_value :: proc($type: typeid) -> parodin.ExecProc {
+    return  proc(content: []parodin.ParseResult, exec_data: rawptr) -> parodin.ParseResult {
+        node := new(Node)
+        node^ = cast(Value)(cast(type)strconv.atof(content[0].(string)))
+        return cast(rawptr)node
+    }
 }
 
 exec_operator :: proc($op: Operator) -> parodin.ExecProc {
     return proc(content: []parodin.ParseResult, exec_data: rawptr) -> parodin.ParseResult {
-        fmt.printfln("operator({}): {}", op, content[0].(string))
-        // ed := cast(^ExecData)exec_data
-        // node := new(Operation)
-        // node.kind = op
-        // node.rhs = pop(&ed.nodes)
-        // node.lhs = pop(&ed.nodes)
-        // append(&ed.nodes, node)
-        return nil
+        node := new(Node)
+        node^ = Operation{
+            kind = op,
+            lhs = cast(^Node)content[0].(rawptr),
+            rhs = cast(^Node)content[1].(rawptr),
+        }
+        return cast(rawptr)node
     }
 }
 
-exec_function :: proc($function: FunctionId) -> parodin.ExecProc {
+exec_function :: proc($id: FunctionId) -> parodin.ExecProc {
     return proc(content: []parodin.ParseResult, exec_data: rawptr) -> parodin.ParseResult {
-        fmt.printfln("function({}): {}", function, content[0].(string))
-        // ed := cast(^ExecData)exec_data
-        // node := new(Operation)
-        // node.kind = op
-        // node.rhs = pop(&ed.nodes)
-        // node.lhs = pop(&ed.nodes)
-        // append(&ed.nodes, node)
-        return nil
+        node := new(Node)
+        node^ = Function{
+            id = id,
+            expr = cast(^Node)content[0].(rawptr),
+        }
+        return cast(rawptr)node
     }
 }
 
 exec_parent :: proc(content: []parodin.ParseResult, exec_data: rawptr) -> parodin.ParseResult {
-    fmt.printfln("parent: {}", content[0].(string))
-    // ed := cast(^ExecData)exec_data
-    // node := new(Parent)
-    // node.content = pop(&ed.nodes)
-    // append(&ed.nodes, node)
-    return nil
+    node := new(Node)
+    node^ = Parent{
+        expr = cast(^Node)content[0].(rawptr),
+    }
+    return cast(rawptr)node
 }
 
 skip_spaces :: proc(char: rune) -> bool {
@@ -150,8 +141,8 @@ arithmetic_grammar :: proc() -> ^parodin.Parser {
 
     digits := plus(range('0', '9'), name = "digits")
 
-    ints := single(digits, name = "ints", exec = exec_ints)
-    floats := seq(digits, lit('.'), opt(digits), name = "floats", exec = exec_floats)
+    ints := single(digits, name = "ints", exec = exec_value(i32))
+    floats := seq(digits, lit('.'), opt(digits), name = "floats", exec = exec_value(f32))
     parent := seq(lit('('), rec(expr), lit(')'), name = "parent", exec = exec_parent)
     sin := seq(lit("sin"), parent, exec = exec_function(.Sin))
     cos := seq(lit("cos"), parent, exec = exec_function(.Cos))
@@ -193,9 +184,9 @@ main :: proc() {
     // str := "(1 - (2 + 3*12.4)) - 3*3 - (3*4) + 4/2 + (2 + 2)" // the parents on the right cause issues
     str := "sin(1 - (2 + 3*12.4)) - 3*3 - cos(3*4) + 4/2 + (2 + 2)" // the parents on the right cause issues
     fmt.println(str)
-    state, ok := parodin.parse_string(arithmetic_parser, str, &ed)
+    state, res, ok := parodin.parse_string(arithmetic_parser, str, &ed)
     fmt.printfln("{}, {}", state, ok);
-    // node_print(ed.nodes[0])
+    node_print(cast(^Node)res.(rawptr))
 }
 
 // val: 2

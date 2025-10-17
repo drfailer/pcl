@@ -33,7 +33,7 @@ ExecProc :: proc(results: []ParseResult, exec_data: rawptr) -> ParseResult
 
 PredProc :: proc(c: rune) -> bool
 
-ParseProc :: proc(self: ^Parser, state: ^ParserState) -> (err: ParserError)
+ParseProc :: proc(self: ^Parser, state: ^ParserState) -> (res: ParseResult, err: ParserError)
 
 Parser :: struct {
     rc: u32,
@@ -86,7 +86,7 @@ parser_destroy :: proc(parser: ^Parser) {
     free(parser)
 }
 
-parser_parse :: proc(state: ^ParserState, parser: ^Parser) -> (err: ParserError) {
+parser_parse :: proc(state: ^ParserState, parser: ^Parser) -> (res: ParseResult, err: ParserError) {
     return parser->parse(state)
 }
 
@@ -109,10 +109,9 @@ parser_skip :: proc {
     parser_skip_from_proc,
 }
 
-parser_exec_from_proc :: proc(state: ^ParserState, exec: ExecProc) {
+parser_exec_with_results :: proc(state: ^ParserState, exec: ExecProc, results: []ParseResult) -> ParseResult {
     if exec == nil {
-        state.parse_result = state_string(state)
-        return
+        return results[0]
     }
     if state.rd.depth > 0 {
         if state.rd.current_node.ctx.exec != nil {
@@ -122,26 +121,37 @@ parser_exec_from_proc :: proc(state: ^ParserState, exec: ExecProc) {
         }
         state.rd.current_node.ctx = ExecContext{exec, state^}
     } else {
-        state.parse_result = exec([]ParseResult{state_string(state)}, state.exec_data)
+        return exec(results, state.exec_data)
     }
+    return nil
 }
 
-parser_exec_from_parser :: proc(state: ^ParserState, parser: Parser) {
-    parser_exec_from_proc(state, parser.exec)
+// parser_exec_from_proc :: proc(state: ^ParserState, exec: ExecProc) -> ParseResult {
+//     return parser_exec_with_results(state, exec, []ParseResult{state_string(state)})
+// }
+
+parser_exec_single_result :: proc(state: ^ParserState, exec: ExecProc, result: ParseResult) -> ParseResult {
+    return parser_exec_with_results(state, exec, []ParseResult{result})
 }
 
-parser_exec_from_exec_tree :: proc(tree: ^ExecTree) {
+parser_exec_from_exec_tree :: proc(tree: ^ExecTree) -> ParseResult {
     if tree == nil {
-        return
+        return nil
     }
-    parser_exec_from_exec_tree(tree.rhs)
-    parser_exec_from_exec_tree(tree.lhs)
-    tree.ctx.exec([]ParseResult{state_string(&tree.ctx.state)}, tree.ctx.state.exec_data)
+    if tree.rhs == nil && tree.lhs == nil {
+        fmt.printfln("exec leaf: {}", state_string(&tree.ctx.state))
+        return tree.ctx.exec([]ParseResult{state_string(&tree.ctx.state)}, tree.ctx.state.exec_data)
+    }
+    rhs_res := parser_exec_from_exec_tree(tree.rhs)
+    lhs_res := parser_exec_from_exec_tree(tree.lhs)
+    fmt.printfln("node: {} {}", lhs_res, rhs_res)
+    return tree.ctx.exec([]ParseResult{lhs_res, rhs_res}, tree.ctx.state.exec_data)
 }
 
 parser_exec :: proc {
-    parser_exec_from_proc,
-    parser_exec_from_parser,
+    parser_exec_with_results,
+    // parser_exec_from_proc,
+    parser_exec_single_result,
 }
 
 // parse api ///////////////////////////////////////////////////////////////////
@@ -150,7 +160,7 @@ parse_string :: proc(
     parser: ^Parser,
     str: string,
     exec_data: rawptr = nil,
-) -> (state: ParserState, ok: bool) {
+) -> (state: ParserState, res: ParseResult, ok: bool) {
     // create the arena for the temporary allocations (error messages)
     bytes: [4096]u8
     arena: mem.Arena
@@ -158,9 +168,10 @@ parse_string :: proc(
     context.temp_allocator = mem.arena_allocator(&arena)
 
     // execute the given parser on the string and print error
+    err: ParserError
     str := str
     state = state_create(&str, exec_data)
-    err := parser_parse(&state, parser)
+    res, err = parser_parse(&state, parser)
 
     ok = true
     if err != nil {
@@ -178,7 +189,7 @@ parse_string :: proc(
         ok = false
     }
     free_all(context.temp_allocator)
-    return state, ok
+    return state, res, ok
 }
 
 // print grammar ///////////////////////////////////////////////////////////////

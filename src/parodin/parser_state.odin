@@ -56,7 +56,6 @@ ParserState :: struct {
     cur: int,
     loc: Location,
     exec_data: rawptr,
-    parse_result: ParseResult,
     rd: RecursionData,
 }
 
