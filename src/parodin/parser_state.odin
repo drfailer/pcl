@@ -25,10 +25,21 @@ ExecTree :: struct {
     ctx: ExecContext,
 }
 
+// use for left recursive grammars
 RecursionData :: struct {
     exec_trees: map[^Parser]^ExecTree,
     current_node: ^ExecTree,
     depth: u64,
+}
+
+// QUESTION: can we solve the left recursion and the branching using the same data structure?
+
+// use when branching
+BranchingData :: struct {
+    count: u64,
+    execs: [dynamic]ExecContext,
+    // QUESTION: can we cache the states so that we don't have to parse the content multiple times when we see similar paths
+    // NOTE: such an optimization will not replace a grammar optimization
 }
 
 ParserState :: struct {
@@ -38,6 +49,7 @@ ParserState :: struct {
     loc: Location,
     exec_data: rawptr,
     rd: RecursionData,
+    bd: BranchingData,
 }
 
 state_set :: proc(dest: ^ParserState, src: ^ParserState) {

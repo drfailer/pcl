@@ -24,11 +24,6 @@ ParseResult :: union {
     rawptr,
 }
 
-// TODO:
-// It would be better if the content could be the result of the sub rules (could it even be variadic?)
-// ContentType :: union {string, rawptr}
-// exec(r1, r2, ..., rn, exec_data)
-// ExecProc :: proc(content: string, exec_data: rawptr)
 ExecProc :: proc(results: []ParseResult, exec_data: rawptr) -> ParseResult
 
 PredProc :: proc(c: rune) -> bool
@@ -36,7 +31,7 @@ PredProc :: proc(c: rune) -> bool
 ParseProc :: proc(self: ^Parser, state: ^ParserState) -> (res: ParseResult, err: ParserError)
 
 Parser :: struct {
-    rc: u32,
+    rc: u32, // TODO: parsers should be created using a dedicated arena so that they can be all freed at once
     name: string,
     parse: ParseProc,
     skip: PredProc,
@@ -115,7 +110,9 @@ parser_skip :: proc {
 
 parser_exec_with_results :: proc(state: ^ParserState, exec: ExecProc, results: []ParseResult) -> ParseResult {
     if exec == nil {
-        // FIXME this is wrong
+        // FIXME: this is wrong
+        // - incorect when len(results) > 0
+        // - discard the tokens during recursion
         return results[0]
     }
     if state.rd.depth > 0 {

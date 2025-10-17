@@ -330,6 +330,9 @@ seq :: proc(
  * The or process rules in order, which means that the first rule in the list
  * will be tested before the second. This parser is greedy and will return the
  * first rule that can be applied on the input.
+ *
+ * TODO: the execution functions of the sub rules should only be executed on
+ *       success, we need a system similar to lrec
  */
 or :: proc(
     parsers: ..^Parser,
@@ -341,6 +344,7 @@ or :: proc(
         parser_skip(state, self.skip)
         for parser in self.parsers {
             sub_state := state^
+            // TODO: sub_state.execute = false;
             if sub_res, sub_err := parser_parse(&sub_state, parser); sub_err == nil {
                 state_set(state, &sub_state)
                 res = parser_exec(state, self.exec, sub_res)
