@@ -446,7 +446,6 @@ lrec :: proc(
         }
 
         if state.rd.depth == 0 {
-            // exec_tree_print(state.rd.current_node)
             res = parser_exec_from_exec_tree(state.rd.current_node)
             state.rd.current_node = nil
             clear(&state.rd.exec_trees)

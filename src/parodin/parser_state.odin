@@ -25,29 +25,10 @@ ExecTree :: struct {
     ctx: ExecContext,
 }
 
-exec_tree_print :: proc(tree: ^ExecTree, lvl := 0) {
-    if tree == nil {
-        return
-    }
-
-    for j in 0..<lvl {
-        fmt.print("|  ")
-    }
-    tree.ctx.exec([]ParseResult{state_string(&tree.ctx.state)}, tree.ctx.state.exec_data)
-    exec_tree_print(tree.lhs, lvl + 1)
-    exec_tree_print(tree.rhs, lvl + 1)
-    if tree.lhs != nil || tree.rhs != nil {
-        for i in 0..<lvl {
-            fmt.print("|  ")
-        }
-        fmt.print("+---\n")
-    }
-}
-
 RecursionData :: struct {
     exec_trees: map[^Parser]^ExecTree,
     current_node: ^ExecTree,
-    depth: u64, // depth per recursive rules???
+    depth: u64,
 }
 
 ParserState :: struct {

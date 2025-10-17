@@ -50,40 +50,38 @@ ExecData :: struct {
     count2: int,
 }
 
-print_indent :: proc(lvl: int) {
+tree_print_indent :: proc(lvl: int, last_line := false) {
     for i in 0..<lvl {
-        fmt.print("  ")
+        fmt.print("|  ")
     }
+    if last_line do fmt.print("+---\n")
 }
 
-node_print :: proc(node: ^Node, lvl: int = 0) {
+tree_print :: proc(node: ^Node, lvl := 0) {
+    if node == nil {
+        return
+    }
+
+    tree_print_indent(lvl)
     switch n in node^ {
     case Value:
-        print_indent(lvl)
         switch v in n {
-        case i32: fmt.printfln("{}", v)
-        case f32: fmt.printfln("{}", v)
+        case i32: fmt.printfln("value: {}", v)
+        case f32: fmt.printfln("value: {}", v)
         }
     case Operation:
-        node_print(n.rhs, lvl + 1)
-        print_indent(lvl)
-        switch n.kind {
-        case .Add: fmt.println("+")
-        case .Sub: fmt.println("-")
-        case .Mul: fmt.println("*")
-        case .Div: fmt.println("/")
-        }
-        node_print(n.lhs, lvl + 1)
+        fmt.printfln("operator({})", n.kind)
+        tree_print(n.lhs, lvl + 1)
+        tree_print(n.rhs, lvl + 1)
+        tree_print_indent(lvl, true)
     case Parent:
-        print_indent(lvl)
-        fmt.println("(")
-        node_print(n.expr, lvl + 1)
-        print_indent(lvl)
-        fmt.println(")")
+        fmt.println("parent:")
+        tree_print(n.expr, lvl + 1)
+        tree_print_indent(lvl, true)
     case Function:
-        print_indent(lvl)
-        fmt.printfln("{}", n.id)
-        node_print(n.expr, lvl + 1)
+        fmt.printfln("function({}):", n.id)
+        tree_print(n.expr, lvl + 1)
+        tree_print_indent(lvl, true)
     }
 }
 
@@ -132,6 +130,15 @@ skip_spaces :: proc(char: rune) -> bool {
     return u8(char) == ' ' || u8(char) == '\n'
 }
 
+// <expr> := <expr> "+" <term> | <term>
+//
+// <expr> := <term> <expr'>
+// <expr'> := "+" <term> <expr'> | empty
+//
+// <term> := <factor> <term'>
+// <term'> := "*" <factor> <term'> | emtpy
+//
+// <factor> := <number> | <parent>
 arithmetic_grammar :: proc() -> ^parodin.Parser {
     using parodin
 
@@ -161,16 +168,6 @@ arithmetic_grammar :: proc() -> ^parodin.Parser {
     return expr
 }
 
-// <expr> := <expr> "+" <term> | <term>
-//
-// <expr> := <term> <expr'>
-// <expr'> := "+" <term> <expr'> | empty
-//
-// <term> := <factor> <term'>
-// <term'> := "*" <factor> <term'> | emtpy
-//
-// <factor> := <number> | <parent>
-
 main :: proc() {
     ed: ExecData
     arithmetic_parser := arithmetic_grammar()
@@ -186,18 +183,5 @@ main :: proc() {
     fmt.println(str)
     state, res, ok := parodin.parse_string(arithmetic_parser, str, &ed)
     fmt.printfln("{}, {}", state, ok);
-    node_print(cast(^Node)res.(rawptr))
+    tree_print(cast(^Node)res.(rawptr))
 }
-
-// val: 2
-// val: 4
-// div: 4/2
-// val: 3
-// val: 3
-// mul: 3*3
-// val: 2
-// val: 1
-// sub: 1 - 2
-// par: (1 - 2)
-// add: (1 - 2) + 3*3
-// sub: (1 - 2) + 3*3 - 4/2
