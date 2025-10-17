@@ -91,6 +91,9 @@ parser_parse :: proc(state: ^ParserState, parser: ^Parser) -> (res: ParseResult,
 }
 
 parser_skip_from_proc :: proc(state: ^ParserState, parser_skip: PredProc) {
+    if parser_skip == nil {
+        return
+    }
     state := state
     for state.cur < len(state.content) && parser_skip(state_char(state)) {
         if state_char(state) == '\n' {
@@ -106,11 +109,13 @@ parser_skip_from_parser :: proc(state: ^ParserState, parser: Parser) {
 }
 
 parser_skip :: proc {
+    parser_skip_from_parser,
     parser_skip_from_proc,
 }
 
 parser_exec_with_results :: proc(state: ^ParserState, exec: ExecProc, results: []ParseResult) -> ParseResult {
     if exec == nil {
+        // FIXME this is wrong
         return results[0]
     }
     if state.rd.depth > 0 {
@@ -139,12 +144,10 @@ parser_exec_from_exec_tree :: proc(tree: ^ExecTree) -> ParseResult {
         return nil
     }
     if tree.rhs == nil && tree.lhs == nil {
-        fmt.printfln("exec leaf: {}", state_string(&tree.ctx.state))
         return tree.ctx.exec([]ParseResult{state_string(&tree.ctx.state)}, tree.ctx.state.exec_data)
     }
     rhs_res := parser_exec_from_exec_tree(tree.rhs)
     lhs_res := parser_exec_from_exec_tree(tree.lhs)
-    fmt.printfln("node: {} {}", lhs_res, rhs_res)
     return tree.ctx.exec([]ParseResult{lhs_res, rhs_res}, tree.ctx.state.exec_data)
 }
 

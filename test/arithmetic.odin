@@ -148,8 +148,9 @@ arithmetic_grammar :: proc() -> ^parodin.Parser {
 
     digits := plus(range('0', '9'), name = "digits")
 
-    ints := single(digits, name = "ints", exec = exec_value(i32))
-    floats := seq(digits, lit('.'), opt(digits), name = "floats", exec = exec_value(f32))
+    ints := combine(digits, name = "ints", exec = exec_value(i32))
+    floats := combine(seq(digits, lit('.'), opt(digits)), name = "floats", exec = exec_value(f32))
+
     parent := seq(lit('('), rec(expr), lit(')'), name = "parent", exec = exec_parent)
     sin := seq(lit("sin"), parent, exec = exec_function(.Sin))
     cos := seq(lit("cos"), parent, exec = exec_function(.Cos))
@@ -168,20 +169,25 @@ arithmetic_grammar :: proc() -> ^parodin.Parser {
     return expr
 }
 
-main :: proc() {
-    ed: ExecData
+print_tree_of_expression :: proc(str: string) {
     arithmetic_parser := arithmetic_grammar()
     defer parodin.parser_destroy(arithmetic_parser)
 
-    // str := "1"
-    // str := "1 - (2 + 3)"
-    // str := "2 + 3 - 1"
-    // str := "(1 - 2) - 3*3 + 4/2"
-    // str := "(1 - (2 + 3*12.4)) - 3*3 + 4/2" // missing one operator and one value :(
-    // str := "(1 - (2 + 3*12.4)) - 3*3 - (3*4) + 4/2 + (2 + 2)" // the parents on the right cause issues
-    str := "sin(1 - (2 + 3*12.4)) - 3*3 - cos(3*4) + 4/2 + (2 + 2)" // the parents on the right cause issues
-    fmt.println(str)
-    state, res, ok := parodin.parse_string(arithmetic_parser, str, &ed)
-    fmt.printfln("{}, {}", state, ok);
+    state, res, ok := parodin.parse_string(arithmetic_parser, str)
+    if !ok {
+        fmt.printfln("parsing the expression `{}` failed.", str)
+        return
+    }
+    fmt.printfln("tree of `{}`:", str)
     tree_print(cast(^Node)res.(rawptr))
+}
+
+main :: proc() {
+    print_tree_of_expression("123.3")
+    // print_tree_of_expression("234 + 356 - 123")
+    // print_tree_of_expression("1 - (2 + 3)")
+    // print_tree_of_expression("(1 - 2) - 3*3 + 4/2")
+    // print_tree_of_expression("(1 - (2 + 3*12.4)) - 3*3 + 4/2")
+    // print_tree_of_expression("(1 - (2 + 3*12.4)) - 3*3 - (3*4) + 4/2 + (2 + 2)")
+    print_tree_of_expression("sin(1 - (2 + 3*12.4)) - 3*3 - cos(3*4) + 4/2 + (2 + 2)")
 }

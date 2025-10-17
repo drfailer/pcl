@@ -4,19 +4,9 @@ import "core:fmt"
 import "core:strings"
 import "core:slice"
 
-// default parser functions ////////////////////////////////////////////////////
+// configuration varibles //////////////////////////////////////////////////////
 
-test_exec :: proc($message: string) -> ExecProc {
-    return proc(content: string, exec_data: rawptr) {
-        fmt.printfln("test_exec: {} (content = `{}')", message, content)
-    }
-}
-
-default_skip :: proc(c: rune) -> bool {
-    return false
-}
-
-SKIP := default_skip
+SKIP: PredProc = nil
 
 // combinators /////////////////////////////////////////////////////////////////
 
@@ -150,8 +140,6 @@ lit_str :: proc(
 
 lit :: proc { lit_c, lit_str }
 
-// TODO regex rule
-
 single :: proc(
     parser: ^Parser,
     skip: PredProc = SKIP,
@@ -166,6 +154,38 @@ single :: proc(
         }
         state_set(state, &sub_state)
         res = parser_exec(state, self.exec, res)
+        state_save_pos(state)
+        return res, nil
+    }
+    return parser_create(name, parse, skip, exec, parsers = []^Parser{parser})
+}
+
+/*
+ * This parser is used when we need to combine parsers but run the execution
+ * function on the whole parsed string.
+ *
+ * Example:
+ *
+ * normal_rule := seq(rang('0', '9'), exec = foo)
+ * parse("12345") => foo(["1", "2", "3", "4", "5"])
+ *
+ * combined_rule := combine(seq(rang('0', '9')), exec = foo)
+ * parse("12345") => foo(["12345"])
+ */
+combine :: proc(
+    parser: ^Parser,
+    skip: PredProc = SKIP,
+    exec: ExecProc = nil,
+    name: string = "single",
+) -> ^Parser {
+    parse := proc(self: ^Parser, state: ^ParserState) -> (res: ParseResult, err: ParserError) {
+        parser_skip(state, self.skip)
+        pos := state.pos
+        if res, err = parser_parse(state, self.parsers[0]); err != nil {
+            return nil, err
+        }
+        state.pos = pos
+        res = parser_exec(state, self.exec, state_string(state))
         state_save_pos(state)
         return res, nil
     }
