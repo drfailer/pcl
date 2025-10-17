@@ -1,4 +1,4 @@
-package parodin
+package pcl
 
 import "core:strings"
 import "core:fmt"
@@ -128,10 +128,6 @@ parser_exec_with_results :: proc(state: ^ParserState, exec: ExecProc, results: [
     return nil
 }
 
-// parser_exec_from_proc :: proc(state: ^ParserState, exec: ExecProc) -> ParseResult {
-//     return parser_exec_with_results(state, exec, []ParseResult{state_string(state)})
-// }
-
 parser_exec_single_result :: proc(state: ^ParserState, exec: ExecProc, result: ParseResult) -> ParseResult {
     return parser_exec_with_results(state, exec, []ParseResult{result})
 }
@@ -140,17 +136,23 @@ parser_exec_from_exec_tree :: proc(tree: ^ExecTree) -> ParseResult {
     if tree == nil {
         return nil
     }
+    // defer free(tree)
     if tree.rhs == nil && tree.lhs == nil {
         return tree.ctx.exec([]ParseResult{state_string(&tree.ctx.state)}, tree.ctx.state.exec_data)
     }
-    rhs_res := parser_exec_from_exec_tree(tree.rhs)
     lhs_res := parser_exec_from_exec_tree(tree.lhs)
-    return tree.ctx.exec([]ParseResult{lhs_res, rhs_res}, tree.ctx.state.exec_data)
+    rhs_res := parser_exec_from_exec_tree(tree.rhs)
+
+    results := make([dynamic]ParseResult)
+    defer delete(results)
+
+    if lhs_res != nil do append(&results, lhs_res)
+    if rhs_res != nil do append(&results, rhs_res)
+    return tree.ctx.exec(results[:], tree.ctx.state.exec_data)
 }
 
 parser_exec :: proc {
     parser_exec_with_results,
-    // parser_exec_from_proc,
     parser_exec_single_result,
 }
 

@@ -1,4 +1,4 @@
-package parodin
+package pcl
 
 import "core:fmt"
 import "core:strconv"
@@ -30,6 +30,7 @@ RecursionData :: struct {
     exec_trees: map[^Parser]^ExecTree,
     current_node: ^ExecTree,
     depth: u64,
+    // TODO: allocator
 }
 
 // QUESTION: can we solve the left recursion and the branching using the same data structure?
@@ -38,6 +39,7 @@ RecursionData :: struct {
 BranchingData :: struct {
     count: u64,
     execs: [dynamic]ExecContext,
+    // TODO: allocator
     // QUESTION: can we cache the states so that we don't have to parse the content multiple times when we see similar paths
     // NOTE: such an optimization will not replace a grammar optimization
 }
