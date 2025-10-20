@@ -185,6 +185,7 @@ parse_string :: proc(
     err: ParserError
     str := str
     state = state_create(&str, exec_data, mem.arena_allocator(&arena), mem.dynamic_arena_allocator(&tree_arena))
+    defer state_destroy(&state)
     res, err = parser_parse(&state, parser)
 
     ok = true

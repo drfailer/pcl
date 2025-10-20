@@ -82,7 +82,8 @@ state_create :: proc(
     }
 }
 
-state_destroy :: proc(state: ParserState) {
+state_destroy :: proc(state: ^ParserState) {
+    delete(state.rd.exec_trees)
 }
 
 state_eat_one :: proc(state: ^ParserState) -> (ok: bool) {
