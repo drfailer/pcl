@@ -31,7 +31,7 @@ RecursionData :: struct {
     exec_trees: map[^Parser]^ExecTree,
     current_node: ^ExecTree,
     depth: u64,
-    // TODO: allocator
+    tree_allocator: mem.Allocator,
 }
 
 // QUESTION: can we solve the left recursion and the branching using the same data structure?
@@ -66,7 +66,8 @@ state_set :: proc(dest: ^ParserState, src: ^ParserState) {
 state_create :: proc(
     content: ^string,
     exec_data: rawptr,
-    error_allocator: mem.Allocator
+    error_allocator: mem.Allocator,
+    tree_allocator: mem.Allocator,
 ) -> ParserState {
     return ParserState{
         content = content,
@@ -75,6 +76,9 @@ state_create :: proc(
         loc = Location{1, 1, ""},
         exec_data = exec_data,
         error_allocator = error_allocator,
+        rd = RecursionData {
+            tree_allocator = tree_allocator
+        },
     }
 }
 

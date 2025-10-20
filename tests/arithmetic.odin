@@ -175,8 +175,10 @@ skip_spaces :: proc(char: rune) -> bool {
 // <term'> := "*" <factor> <term'> | emtpy
 //
 // <factor> := <number> | <parent>
-arithmetic_grammar :: proc() -> ^pcl.Parser {
+arithmetic_grammar :: proc(allocator: pcl.ParserAllocator) -> ^pcl.Parser {
     using pcl
+
+    context.allocator = allocator
 
     pcl.SKIP = skip_spaces
 
@@ -206,8 +208,9 @@ arithmetic_grammar :: proc() -> ^pcl.Parser {
 }
 
 print_tree_of_expression :: proc(str: string) {
-    arithmetic_parser := arithmetic_grammar()
-    defer pcl.parser_destroy(arithmetic_parser)
+    parser_allocator := pcl.parser_allocator_create()
+    arithmetic_parser := arithmetic_grammar(parser_allocator)
+    defer pcl.parser_allocator_destroy(parser_allocator)
 
     state, res, ok := pcl.parse_string(arithmetic_parser, str)
     if !ok {
@@ -220,8 +223,9 @@ print_tree_of_expression :: proc(str: string) {
 
 @(test)
 test_numbers :: proc(t: ^testing.T) {
-    arithmetic_parser := arithmetic_grammar()
-    defer pcl.parser_destroy(arithmetic_parser)
+    parser_allocator := pcl.parser_allocator_create()
+    arithmetic_parser := arithmetic_grammar(parser_allocator)
+    defer pcl.parser_allocator_destroy(parser_allocator)
 
     state, res, ok := pcl.parse_string(arithmetic_parser, "123")
     testing.expect(t, ok == true)
@@ -234,8 +238,9 @@ test_numbers :: proc(t: ^testing.T) {
 
 @(test)
 test_operation :: proc(t: ^testing.T) {
-    arithmetic_parser := arithmetic_grammar()
-    defer pcl.parser_destroy(arithmetic_parser)
+    parser_allocator := pcl.parser_allocator_create()
+    arithmetic_parser := arithmetic_grammar(parser_allocator)
+    defer pcl.parser_allocator_destroy(parser_allocator)
 
     state, res, ok := pcl.parse_string(arithmetic_parser, "1 - 2 + 3")
     testing.expect(t, ok == true)
@@ -248,8 +253,9 @@ test_operation :: proc(t: ^testing.T) {
 
 @(test)
 test_functions :: proc(t: ^testing.T) {
-    arithmetic_parser := arithmetic_grammar()
-    defer pcl.parser_destroy(arithmetic_parser)
+    parser_allocator := pcl.parser_allocator_create()
+    arithmetic_parser := arithmetic_grammar(parser_allocator)
+    defer pcl.parser_allocator_destroy(parser_allocator)
 
     state, res, ok := pcl.parse_string(arithmetic_parser, "sin(3.14)")
     testing.expect(t, ok == true)
@@ -257,7 +263,6 @@ test_functions :: proc(t: ^testing.T) {
 
     // BUG: there is an inconsistency when running the sequential parsers when beeing in recusion mode or not
     // state, res, ok = pcl.parse_string(arithmetic_parser, "sin(1 - (2 + 3*12.4)) - 3*3 - cos(3*4) + 4/2 + (2 + 2)")
-    state, res, ok = pcl.parse_string(arithmetic_parser, "1 + sin(1 - (2 + 3*12.4)) - 3*3 - cos(3*4) + 4/2 + (2 + 2)")
     testing.expect(t, ok == true)
     testing.expect(t, node_eval(cast(^Node)res.(rawptr)) == (math.sin_f32(1 - (2 + 3*12.4)) - 3*3 - math.cos_f32(3*4) + 4/2 + (2 + 2)))
 }

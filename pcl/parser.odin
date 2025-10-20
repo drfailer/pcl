@@ -39,13 +39,26 @@ PredProc :: proc(c: rune) -> bool
 ParseProc :: proc(self: ^Parser, state: ^ParserState) -> (res: ParseResult, err: ParserError)
 
 Parser :: struct {
-    rc: u32, // TODO: parsers should be created using a dedicated arena so that they can be all freed at once
     name: string,
     parse: ParseProc,
     skip: PredProc,
     exec: ExecProc,
     pred: PredProc,
     parsers: [dynamic]^Parser,
+}
+
+ParserAllocator :: mem.Allocator
+
+parser_allocator_create :: proc() -> ParserAllocator {
+    arena := new(mem.Dynamic_Arena)
+    mem.dynamic_arena_init(arena)
+    return mem.dynamic_arena_allocator(arena)
+}
+
+parser_allocator_destroy :: proc(allocator: ParserAllocator) {
+    arena := cast(^mem.Dynamic_Arena)allocator.data
+    mem.dynamic_arena_destroy(arena)
+    free(arena)
 }
 
 parser_create :: proc(
@@ -57,7 +70,6 @@ parser_create :: proc(
     parsers: []^Parser = nil,
 ) -> ^Parser {
     parser := new(Parser)
-    parser.rc = 0
     parser.name = name
     parser.parse = parse
     parser.skip = skip
@@ -69,24 +81,10 @@ parser_create :: proc(
 
         for sub_parser, idx in parsers {
             if sub_parser == nil do continue
-            sub_parser.rc += 1
             parser.parsers[idx] = sub_parser
         }
     }
     return parser
-}
-
-parser_destroy :: proc(parser: ^Parser) {
-    if parser.parsers != nil && len(parser.parsers) > 0 {
-        for sub_parser in parser.parsers {
-            sub_parser.rc -= 1
-            if sub_parser.rc == 0 {
-                parser_destroy(sub_parser)
-            }
-        }
-    }
-    delete(parser.parsers)
-    free(parser)
 }
 
 parser_parse :: proc(state: ^ParserState, parser: ^Parser) -> (res: ParseResult, err: ParserError) {
@@ -176,10 +174,15 @@ parse_string :: proc(
     arena: mem.Arena
     mem.arena_init(&arena, bytes[:])
 
+    // allocator for the exec tree
+    tree_arena: mem.Dynamic_Arena
+    mem.dynamic_arena_init(&tree_arena)
+    defer mem.dynamic_arena_destroy(&tree_arena)
+
     // execute the given parser on the string and print error
     err: ParserError
     str := str
-    state = state_create(&str, exec_data, mem.arena_allocator(&arena))
+    state = state_create(&str, exec_data, mem.arena_allocator(&arena), mem.dynamic_arena_allocator(&tree_arena))
     res, err = parser_parse(&state, parser)
 
     ok = true
