@@ -155,6 +155,7 @@ exec_function :: proc($id: FunctionId) -> pcl.ExecProc {
 
 exec_parent :: proc(content: []pcl.ParseResult, exec_data: rawptr) -> pcl.ParseResult {
     node := new(Node)
+    fmt.printfln("exec_parent: {}", content)
     node^ = Parent{
         expr = cast(^Node)content[0].(rawptr),
     }
@@ -262,11 +263,11 @@ test_functions :: proc(t: ^testing.T) {
 }
 
 main :: proc() {
-    print_tree_of_expression("123.3")
-    print_tree_of_expression("234 + 356 - 123")
-    print_tree_of_expression("1 - (2 + 3)")
-    print_tree_of_expression("(1 - 2) - 3*3 + 4/2")
-    print_tree_of_expression("(1 - (2 + 3*12.4)) - 3*3 + 4/2")
-    print_tree_of_expression("(1 - (2 + 3*12.4)) - 3*3 - (3*4) + 4/2 + (2 + 2)")
-    print_tree_of_expression("sin(1 - (2 + 3*12.4)) - 3*3 - cos(3*4) + 4/2 + (2 + 2)")
+    // print_tree_of_expression("123.3")
+    // print_tree_of_expression("234 + 356 - 123")
+    // print_tree_of_expression("1 - (2 + 3)")
+    // print_tree_of_expression("(1 - 2) - 3*3 + 4/2")
+    // print_tree_of_expression("(1 - (2 + 3*12.4)) - 3*3 + 4/2")
+    // print_tree_of_expression("(1 - (2 + 3*12.4)) - 3*3 - (3*4) + 4/2 + (2 + 2)")
+    print_tree_of_expression("1 + sin(1 - (2 + 3*12.4)) - 3*3 - cos(3*4) + 4/2 + (2 + 2)")
 }

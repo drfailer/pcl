@@ -17,11 +17,7 @@ declare :: proc(
 ) -> ^Parser {
     parse := proc(self: ^Parser, state: ^ParserState) -> (res: ParseResult, err: ParserError) {
         if len(self.parsers) == 0 || self.parsers[0] == nil {
-            sb := strings.builder_make(allocator = context.temp_allocator)
-            strings.write_string(&sb, "unimpleted parser `")
-            strings.write_string(&sb, self.name)
-            strings.write_string(&sb, "`.")
-            return nil, InternalError{strings.to_string(sb)}
+            return nil, parser_error(InternalError, state, "unimplemented parser `{}`.", self.name)
         }
 
         parser_skip(state, self.skip)
@@ -241,11 +237,7 @@ plus :: proc(
             state_save_pos(state)
             return res, nil
         }
-        sb := strings.builder_make(allocator = context.temp_allocator)
-        strings.write_string(&sb, "rule {")
-        strings.write_string(&sb, self.parsers[0].name)
-        strings.write_string(&sb, "}+ failed.")
-        return nil, SyntaxError{strings.to_string(sb)}
+        return nil, parser_error(SyntaxError, state, "rule {%s}+ failed.", self.parsers[0].name)
     }
     return parser_create(name, parse, skip, exec, parsers = []^Parser{parser})
 }
@@ -275,13 +267,8 @@ times :: proc(
             state_save_pos(state)
             return res, nil
         }
-        sb := strings.builder_make(allocator = context.temp_allocator)
-        strings.write_string(&sb, "rule {")
-        strings.write_string(&sb, self.parsers[0].name)
-        strings.write_string(&sb, "}{" + nb_times + "} failed (")
-        strings.write_int(count)
-        strings.write_string(&sb, " found).")
-        return nil, SyntaxError{strings.to_string(sb)}
+        return nil, parser_error(SyntaxError, state, "rule {%s}{%d} failed (%d found)",
+                                 self.parsers[0].name, nb_times, count)
     }
     return parser_create(name, parse, skip, exec, parsers = []^Parser{parser})
 }
@@ -305,15 +292,8 @@ seq :: proc(
                 case InternalError:
                     return nil, err
                 case SyntaxError:
-                    sb := strings.builder_make(allocator = context.temp_allocator)
-                    strings.write_string(&sb, "parser `")
-                    strings.write_string(&sb, parser.name)
-                    strings.write_string(&sb, "` returned the error `")
-                    strings.write_string(&sb, e.message)
-                    strings.write_string(&sb, "` in sequece `")
-                    strings.write_string(&sb, self.name)
-                    strings.write_string(&sb, "`")
-                    return nil, SyntaxError{strings.to_string(sb)}
+                    return nil, parser_error(SyntaxError, state, "parser `{}` return the error `{}` in sequence `{}`",
+                                             parser.name, e.message, self.name)
                 }
             }
             append(&results, sub_res)
@@ -351,13 +331,10 @@ or :: proc(
                 state_save_pos(state)
                 return res, nil
             }
-            free_all(context.temp_allocator)
+            free_all(state.error_allocator)
         }
-        sb := strings.builder_make(allocator = context.temp_allocator)
-        strings.write_string(&sb, "none of the rules in `")
-        strings.write_string(&sb, self.name)
-        strings.write_string(&sb, "`could be applied.")
-        return nil, SyntaxError{strings.to_string(sb)}
+        // TODO: execute the last rules
+        return nil, parser_error(SyntaxError, state, "none of the rules in `{}` could be applied.", self.name)
     }
     return parser_create(name, parse, skip, exec, parsers = parsers)
 }
@@ -374,7 +351,7 @@ opt :: proc(
         if res, err = parser_parse(&sub_state, self.parsers[0]); err != nil {
             return nil, nil
         }
-        free_all(context.temp_allocator)
+        free_all(state.error_allocator)
         state_set(state, &sub_state)
         res = parser_exec(state, self.exec, res)
         state_save_pos(state)

@@ -4,7 +4,7 @@ import "core:strings"
 import "core:fmt"
 import "core:mem"
 
-// parser //////////////////////////////////////////////////////////////////////
+// errors //////////////////////////////////////////////////////////////////////
 
 SyntaxError :: struct {
     message: string,
@@ -18,6 +18,14 @@ ParserError :: union {
     SyntaxError,
     InternalError,
 }
+
+parser_error :: proc($error_type: typeid, state: ^ParserState, str: string, args: ..any) -> ParserError {
+    return error_type{
+        fmt.aprintf(str, ..args, allocator = state.error_allocator)
+    }
+}
+
+// parser //////////////////////////////////////////////////////////////////////
 
 ParseResult :: union {
     string,
@@ -167,12 +175,11 @@ parse_string :: proc(
     bytes: [4096]u8
     arena: mem.Arena
     mem.arena_init(&arena, bytes[:])
-    context.temp_allocator = mem.arena_allocator(&arena)
 
     // execute the given parser on the string and print error
     err: ParserError
     str := str
-    state = state_create(&str, exec_data)
+    state = state_create(&str, exec_data, mem.arena_allocator(&arena))
     res, err = parser_parse(&state, parser)
 
     ok = true

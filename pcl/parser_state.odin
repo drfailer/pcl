@@ -5,6 +5,7 @@ import "core:strconv"
 import "core:strings"
 import "core:unicode/utf8"
 import "core:log"
+import "core:mem"
 
 Location :: struct {
     row: int,
@@ -52,6 +53,8 @@ ParserState :: struct {
     exec_data: rawptr,
     rd: RecursionData,
     bd: BranchingData,
+    error_allocator: mem.Allocator,
+    // TODO: global_state: ^GlobalParserState,
 }
 
 state_set :: proc(dest: ^ParserState, src: ^ParserState) {
@@ -60,13 +63,18 @@ state_set :: proc(dest: ^ParserState, src: ^ParserState) {
     dest.rd = src.rd
 }
 
-state_create :: proc(content: ^string, exec_data: rawptr) -> ParserState {
+state_create :: proc(
+    content: ^string,
+    exec_data: rawptr,
+    error_allocator: mem.Allocator
+) -> ParserState {
     return ParserState{
         content = content,
         pos = 0,
         cur = 0,
         loc = Location{1, 1, ""},
         exec_data = exec_data,
+        error_allocator = error_allocator,
     }
 }
 
