@@ -393,7 +393,7 @@ lrec :: proc(
         terminal_rule := self.parsers[len(self.parsers) - 1]
         middle_rules := self.parsers[1:len(self.parsers) - 1]
 
-        state.rd.current_node = new(ExecTree)
+        state.rd.current_node = new(ExecTree, state.rd.tree_allocator)
 
         state.rd.depth += 1
 
@@ -416,7 +416,7 @@ lrec :: proc(
             return nil, nil
         }
 
-        node := new(ExecTree)
+        node := new(ExecTree, state.rd.tree_allocator)
         node.lhs = state.rd.current_node
         state.rd.current_node = node
 
@@ -433,7 +433,7 @@ lrec :: proc(
         node.ctx.state.pos = node.lhs.ctx.state.pos
         state.rd.exec_trees[recursive_rule] = node
 
-        state.rd.current_node = new(ExecTree)
+        state.rd.current_node = new(ExecTree, state.rd.tree_allocator)
 
         // apply recursive rule
         if _, err = parser_parse(state, recursive_rule); err != nil {

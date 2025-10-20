@@ -5,6 +5,7 @@ import "core:strconv"
 import "core:fmt"
 import "core:testing"
 import "core:math"
+import "core:mem"
 
 Operator :: enum {
     Add,
@@ -47,9 +48,7 @@ Node :: union {
 }
 
 ExecData :: struct {
-    nodes: [dynamic]Node,
-    count1: int,
-    count2: int,
+    node_allocator: mem.Allocator,
 }
 
 node_print_indent :: proc(lvl: int, last_line := false) {
@@ -124,7 +123,8 @@ node_eval :: proc(node: ^Node) -> f32 {
 
 exec_value :: proc($type: typeid) -> pcl.ExecProc {
     return  proc(content: []pcl.ParseResult, exec_data: rawptr) -> pcl.ParseResult {
-        node := new(Node)
+        ed := cast(^ExecData)exec_data
+        node := new(Node, ed.node_allocator)
         node^ = cast(Value)(cast(type)strconv.atof(content[0].(string)))
         return cast(rawptr)node
     }
@@ -132,7 +132,8 @@ exec_value :: proc($type: typeid) -> pcl.ExecProc {
 
 exec_operator :: proc($op: Operator) -> pcl.ExecProc {
     return proc(content: []pcl.ParseResult, exec_data: rawptr) -> pcl.ParseResult {
-        node := new(Node)
+        ed := cast(^ExecData)exec_data
+        node := new(Node, ed.node_allocator)
         node^ = Operation{
             kind = op,
             lhs = cast(^Node)content[0].(rawptr),
@@ -144,7 +145,8 @@ exec_operator :: proc($op: Operator) -> pcl.ExecProc {
 
 exec_function :: proc($id: FunctionId) -> pcl.ExecProc {
     return proc(content: []pcl.ParseResult, exec_data: rawptr) -> pcl.ParseResult {
-        node := new(Node)
+        ed := cast(^ExecData)exec_data
+        node := new(Node, ed.node_allocator)
         node^ = Function{
             id = id,
             expr = cast(^Node)content[0].(rawptr),
@@ -154,7 +156,8 @@ exec_function :: proc($id: FunctionId) -> pcl.ExecProc {
 }
 
 exec_parent :: proc(content: []pcl.ParseResult, exec_data: rawptr) -> pcl.ParseResult {
-    node := new(Node)
+    ed := cast(^ExecData)exec_data
+    node := new(Node, ed.node_allocator)
     fmt.printfln("exec_parent: {}", content)
     node^ = Parent{
         expr = cast(^Node)content[0].(rawptr),
@@ -212,6 +215,11 @@ print_tree_of_expression :: proc(str: string) {
     arithmetic_parser := arithmetic_grammar(parser_allocator)
     defer pcl.parser_allocator_destroy(parser_allocator)
 
+    node_arena_data: [8192]byte
+    node_arena: mem.Arena
+    mem.arena_init(&node_arena, node_arena_data[:])
+    exec_data := ExecData{ mem.arena_allocator(&node_arena) }
+
     state, res, ok := pcl.parse_string(arithmetic_parser, str)
     if !ok {
         fmt.printfln("parsing the expression `{}` failed.", str)
@@ -227,11 +235,18 @@ test_numbers :: proc(t: ^testing.T) {
     arithmetic_parser := arithmetic_grammar(parser_allocator)
     defer pcl.parser_allocator_destroy(parser_allocator)
 
-    state, res, ok := pcl.parse_string(arithmetic_parser, "123")
+    node_arena_data: [8192]byte
+    node_arena: mem.Arena
+    mem.arena_init(&node_arena, node_arena_data[:])
+    exec_data := ExecData{ mem.arena_allocator(&node_arena) }
+
+    state, res, ok := pcl.parse_string(arithmetic_parser, "123", &exec_data)
     testing.expect(t, ok == true)
     testing.expect(t, node_eval(cast(^Node)res.(rawptr)) == 123)
 
-    state, res, ok = pcl.parse_string(arithmetic_parser, "3.14")
+    mem.arena_free_all(&node_arena)
+
+    state, res, ok = pcl.parse_string(arithmetic_parser, "3.14", &exec_data)
     testing.expect(t, ok == true)
     testing.expect(t, node_eval(cast(^Node)res.(rawptr)) == 3.14)
 }
@@ -242,11 +257,18 @@ test_operation :: proc(t: ^testing.T) {
     arithmetic_parser := arithmetic_grammar(parser_allocator)
     defer pcl.parser_allocator_destroy(parser_allocator)
 
-    state, res, ok := pcl.parse_string(arithmetic_parser, "1 - 2 + 3")
+    node_arena_data: [8192]byte
+    node_arena: mem.Arena
+    mem.arena_init(&node_arena, node_arena_data[:])
+    exec_data := ExecData{ mem.arena_allocator(&node_arena) }
+
+    state, res, ok := pcl.parse_string(arithmetic_parser, "1 - 2 + 3", &exec_data)
     testing.expect(t, ok == true)
     testing.expect(t, node_eval(cast(^Node)res.(rawptr)) == (1 - 2 + 3))
 
-    state, res, ok = pcl.parse_string(arithmetic_parser, "(1 - 2) - 3*3 + 4/2")
+    mem.arena_free_all(&node_arena)
+
+    state, res, ok = pcl.parse_string(arithmetic_parser, "(1 - 2) - 3*3 + 4/2", &exec_data)
     testing.expect(t, ok == true)
     testing.expect(t, node_eval(cast(^Node)res.(rawptr)) == ((1 - 2) - 3*3 + 4/2))
 }
@@ -257,12 +279,19 @@ test_functions :: proc(t: ^testing.T) {
     arithmetic_parser := arithmetic_grammar(parser_allocator)
     defer pcl.parser_allocator_destroy(parser_allocator)
 
-    state, res, ok := pcl.parse_string(arithmetic_parser, "sin(3.14)")
+    node_arena_data: [8192]byte
+    node_arena: mem.Arena
+    mem.arena_init(&node_arena, node_arena_data[:])
+    exec_data := ExecData{ mem.arena_allocator(&node_arena) }
+
+    state, res, ok := pcl.parse_string(arithmetic_parser, "sin(3.14)", &exec_data)
     testing.expect(t, ok == true)
     testing.expect(t, node_eval(cast(^Node)res.(rawptr)) == math.sin_f32(3.14))
 
+    mem.arena_free_all(&node_arena)
+
     // BUG: there is an inconsistency when running the sequential parsers when beeing in recusion mode or not
-    // state, res, ok = pcl.parse_string(arithmetic_parser, "sin(1 - (2 + 3*12.4)) - 3*3 - cos(3*4) + 4/2 + (2 + 2)")
+    state, res, ok = pcl.parse_string(arithmetic_parser, "sin(1 - (2 + 3*12.4)) - 3*3 - cos(3*4) + 4/2 + (2 + 2)", &exec_data)
     testing.expect(t, ok == true)
     testing.expect(t, node_eval(cast(^Node)res.(rawptr)) == (math.sin_f32(1 - (2 + 3*12.4)) - 3*3 - math.cos_f32(3*4) + 4/2 + (2 + 2)))
 }

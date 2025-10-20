@@ -115,20 +115,22 @@ parser_skip :: proc {
 }
 
 parser_exec_with_results :: proc(state: ^ParserState, exec: ExecProc, results: []ParseResult) -> ParseResult {
-    if exec == nil {
-        // FIXME: this is wrong
-        // - incorect when len(results) > 0
-        // - discard the tokens during recursion
-        return results[0]
-    }
     if state.rd.depth > 0 {
+        if exec == nil {
+            // TODO: we need to save this somehow?
+            return nil
+        }
         if state.rd.current_node.ctx.exec != nil {
-            node := new(ExecTree)
+            node := new(ExecTree, state.rd.tree_allocator)
             node.lhs = state.rd.current_node
             state.rd.current_node = node
         }
         state.rd.current_node.ctx = ExecContext{exec, state^}
     } else {
+        if exec == nil {
+            // FIXME: how to handle this?
+            return results[0]
+        }
         return exec(results, state.exec_data)
     }
     return nil
@@ -200,7 +202,6 @@ parse_string :: proc(
         state_print_context(&state)
         ok = false
     }
-    free_all(context.temp_allocator)
     return state, res, ok
 }
 
