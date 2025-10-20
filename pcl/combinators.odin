@@ -460,19 +460,16 @@ rec :: proc(parser: ^Parser) -> ^Parser {
     parse := proc(self: ^Parser, state: ^ParserState) -> (res: ParseResult, err: ParserError) {
         recursive_rule := self.parsers[0]
 
-        rd := state.rd
-        state.rd.exec_trees = map[^Parser]^ExecTree{}
+        old_exec_trees := state.rd.exec_trees
+        state.rd.exec_trees = make(map[^Parser]^ExecTree)
+        defer {
+            delete(state.rd.exec_trees)
+            state.rd.exec_trees = old_exec_trees
+        }
 
         if res, err = parser_parse(state, self.parsers[0]); err != nil {
             return nil, err
         }
-
-        if recursive_rule in rd.exec_trees {
-            // do not reset the rhs here!
-            // rd.exec_trees[recursive_rule].rhs = state.rd.current_node
-            state.rd.exec_trees[recursive_rule] = rd.exec_trees[recursive_rule]
-        }
-
         return res, nil
     }
     return parser_create("", parse, nil, nil, parsers = []^Parser{parser})
