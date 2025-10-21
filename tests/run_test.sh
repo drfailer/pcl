@@ -1,1 +1,1 @@
-odin run arithmetic.odin -file -debug
+odin test . -debug -collection:pcl=../ -all-packages

@@ -1,6 +1,6 @@
 package artihmetic
 
-import "../pcl"
+import "pcl:pcl"
 import "core:strconv"
 import "core:fmt"
 import "core:testing"
