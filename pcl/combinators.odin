@@ -484,26 +484,38 @@ block :: proc(
     parse := proc(self: ^Parser, state: ^ParserState) -> (res: ParseResult, err: ParserError) {
         parser_skip(state, self.skip)
         if !state_cursor_on_string(state, opening) {
-            return nil, SyntaxError{"execpted `" + opening + "`"}
+            return nil, parser_error(SyntaxError, state, "opening string not found in `{}({}, {})`.",
+                                     self.name, opening, closing)
         }
         state.cur += len(opening)
+        state.loc.col += len(opening) // opening should not contain \n
         count := 1
+        begin_cur := state.cur
+        end_cur := state.cur
 
         for count > 0 {
             if state_eof(state) {
-                return nil, SyntaxError{"failed to parse `block " + opening + " ... " + closing + "`"}
+                return nil, parser_error(SyntaxError, state, "closing string not found in `{}({}, {})`.",
+                                         self.name, opening, closing)
             }
             if state_cursor_on_string(state, closing) {
                 count -= 1
+                end_cur = state.cur
                 state.cur += len(closing)
+                state.loc.col += len(closing) // closing should not contain \n
             } else if state_cursor_on_string(state, opening) {
                 count += 1
                 state.cur += len(opening)
+                state.loc.col += len(opening) // opening should not contain \n
             } else {
-                state.cur += 1
+                state_eat_one(state)
             }
         }
+        cur := state.cur
+        state.pos = begin_cur
+        state.cur = end_cur
         res = parser_exec(state, self.exec)
+        state.cur = cur
         state_save_pos(state)
         return res, nil
     }
