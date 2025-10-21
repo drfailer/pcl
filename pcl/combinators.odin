@@ -39,6 +39,7 @@ define :: proc(parser: ^Parser, impl: ^Parser) {
     if parser.exec != nil && impl.exec == nil {
         impl.exec = parser.exec
     }
+    impl.name = parser.name
     parser.parsers[0] = impl
 }
 
@@ -49,7 +50,27 @@ empty :: proc() -> ^Parser {
     return parser_create("emtpy", parse, SKIP, nil)
 }
 
-// TODO: create a better error message for rules that use cond
+apply_predicate :: proc(
+    self: ^Parser,
+    state: ^ParserState,
+    error: proc(parser: ^Parser, state: ^ParserState) -> ParserError,
+) -> (res: ParseResult, err: ParserError) {
+    if state_eof(state) {
+        return nil, error(self, state)
+    }
+
+    parser_skip(state, self.skip)
+    if (self.pred(state_char(state))) {
+        if ok := state_eat_one(state); !ok {
+            return nil, InternalError{"state_eat_one failed."}
+        }
+        res = parser_exec(state, self.exec)
+        state_save_pos(state)
+        return res, nil
+    }
+    return nil, error(self, state)
+}
+
 cond :: proc(
     pred: PredProc,
     skip: PredProc = SKIP,
@@ -57,24 +78,9 @@ cond :: proc(
     name: string = "cond",
 ) -> ^Parser {
     parse := proc(self: ^Parser, state: ^ParserState) -> (res: ParseResult, err: ParserError) {
-        ok: bool
-
-        if state_eof(state) {
-            return nil, parser_error(SyntaxError, state, "`{}`, cannot apply predicated (eof was found).",
-                                     self.name)
-        }
-
-        parser_skip(state, self.skip)
-        if (self.pred(state_char(state))) {
-            if ok = state_eat_one(state); !ok {
-                return nil, InternalError{"state_eat_one failed."}
-            }
-            res = parser_exec(state, self.exec)
-            state_save_pos(state)
-            return res, nil
-        }
-        return nil, parser_error(SyntaxError, state, "`{}`, cannot apply predicated.",
-                                 self.name)
+        return apply_predicate(self, state, proc(parser: ^Parser, state: ^ParserState) -> ParserError {
+            return parser_error(SyntaxError, state, "{}: failed to apply predicate.", parser.name)
+        })
     }
     return parser_create(name, parse, skip, exec, pred = pred)
 }
@@ -85,9 +91,14 @@ one_of :: proc(
     exec: ExecProc = nil,
     name: string = "one_of",
 ) -> ^Parser {
-    return cond(proc(c: rune) -> bool {
+    parse := proc(self: ^Parser, state: ^ParserState) -> (res: ParseResult, err: ParserError) {
+        return apply_predicate(self, state, proc(parser: ^Parser, state: ^ParserState) -> ParserError {
+            return parser_error(SyntaxError, state, "{}: expected one of [{}]", parser.name, chars)
+        })
+    }
+    return parser_create(name, parse, skip, exec, pred = proc(c: rune) -> bool {
         return strings.contains_rune(chars, rune(c))
-    }, skip, exec, name)
+    })
 }
 
 range :: proc(
@@ -97,9 +108,14 @@ range :: proc(
     exec: ExecProc = nil,
     name: string = "range",
 ) -> ^Parser {
-    return cond(proc(c: rune) -> bool {
+    parse := proc(self: ^Parser, state: ^ParserState) -> (res: ParseResult, err: ParserError) {
+        return apply_predicate(self, state, proc(parser: ^Parser, state: ^ParserState) -> ParserError {
+            return parser_error(SyntaxError, state, "{}: expected range({}, {})", parser.name, c1, c2)
+        })
+    }
+    return parser_create(name, parse, skip, exec, pred = proc(c: rune) -> bool {
         return c1 <= c && c <= c2
-    }, skip, exec, name)
+    })
 }
 
 lit_c :: proc(
@@ -108,9 +124,14 @@ lit_c :: proc(
     exec: ExecProc = nil,
     name: string = "lit_c",
 ) -> ^Parser {
-    return cond(proc(c: rune) -> bool {
+    parse := proc(self: ^Parser, state: ^ParserState) -> (res: ParseResult, err: ParserError) {
+        return apply_predicate(self, state, proc(parser: ^Parser, state: ^ParserState) -> ParserError {
+            return parser_error(SyntaxError, state, "{}: expected '{}'", parser.name, char)
+        })
+    }
+    return parser_create(name, parse, skip, exec, pred = proc(c: rune) -> bool {
         return c == char
-    }, skip, exec, name)
+    })
 }
 
 lit_str :: proc(
@@ -148,6 +169,7 @@ single :: proc(
         parser_skip(state, self.skip)
         sub_state := state^
         if res, err = parser_parse(&sub_state, self.parsers[0]); err != nil {
+            state_set(state, &sub_state)
             return nil, err
         }
         state_set(state, &sub_state)
@@ -285,15 +307,16 @@ seq :: proc(
         sub_state := state^
         sub_res: ParseResult
 
-        for parser in self.parsers {
+        for parser, parser_idx in self.parsers {
             parser_skip(&sub_state, self.skip)
             if sub_res, err = parser_parse(&sub_state, parser); err != nil {
+                state_set(state, &sub_state)
                 switch e in err {
                 case InternalError:
                     return nil, err
                 case SyntaxError:
-                    return nil, parser_error(SyntaxError, state, "parser `{}` return the error `{}` in sequence `{}`",
-                                             parser.name, e.message, self.name)
+                    return nil, parser_error(SyntaxError, state, "{}[{}]: {}",
+                                             self.name, parser_idx, e.message)
                 }
             }
             append(&results, sub_res)
@@ -351,6 +374,15 @@ opt :: proc(
         parser_skip(state, self.skip)
         sub_state := state^
         if res, err = parser_parse(&sub_state, self.parsers[0]); err != nil {
+            // ISSUE: this allow to transmit error message when the optional
+            //        parser failed but did consume a part of the string (in
+            //        this case, the content was there, but contained an error).
+            //        However, this will not work if the `skip` of the sub-rule
+            //        is different than the skip of this rule.
+            if (self.parsers[0].skip == nil || self.parsers[0].skip == self.skip) && sub_state.cur > state.cur {
+                state_set(state, &sub_state)
+                return nil, err
+            }
             return nil, nil
         }
         free_all(state.global_state.error_allocator)
