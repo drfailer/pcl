@@ -88,11 +88,13 @@ parser_create :: proc(
     return parser
 }
 
+// helper functions ////////////////////////////////////////////////////////////
+
 parser_parse :: proc(state: ^ParserState, parser: ^Parser) -> (res: ParseResult, err: ParserError) {
     return parser->parse(state)
 }
 
-parser_skip_from_proc :: proc(state: ^ParserState, parser_skip: PredProc) {
+parser_skip :: proc(state: ^ParserState, parser_skip: PredProc) {
     if parser_skip == nil {
         return
     }
@@ -104,15 +106,6 @@ parser_skip_from_proc :: proc(state: ^ParserState, parser_skip: PredProc) {
         }
         state_advance(state)
     }
-}
-
-parser_skip_from_parser :: proc(state: ^ParserState, parser: Parser) {
-    parser_skip_from_proc(state, parser.skip)
-}
-
-parser_skip :: proc {
-    parser_skip_from_parser,
-    parser_skip_from_proc,
 }
 
 parser_exec_with_results :: proc(state: ^ParserState, exec: ExecProc, results: []ParseResult) -> ParseResult {
