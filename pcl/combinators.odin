@@ -22,6 +22,7 @@ declare :: proc(
 
         parser_skip(state, self.skip)
         if res, err = parser_parse(state, self.parsers[0]); err != nil {
+            exec_tree_node_destroy(res)
             return nil, err
         }
         return res, nil
@@ -68,7 +69,7 @@ cond :: proc(
             if ok = state_eat_one(state); !ok {
                 return nil, InternalError{"state_eat_one failed."}
             }
-            res = parser_exec(state, self.exec, state_string(state))
+            res = parser_exec(state, self.exec)
             state_save_pos(state)
             return res, nil
         }
@@ -127,7 +128,7 @@ lit_str :: proc(
                 return nil, InternalError{"state_eat_one failed."}
             }
         }
-        res = parser_exec(state, self.exec, state_string(state))
+        res = parser_exec(state, self.exec)
         state_save_pos(state)
         return res, nil
     }
@@ -146,10 +147,13 @@ single :: proc(
         parser_skip(state, self.skip)
         sub_state := state^
         if res, err = parser_parse(&sub_state, self.parsers[0]); err != nil {
+            exec_tree_node_destroy(res)
             return nil, err
         }
         state_set(state, &sub_state)
-        res = parser_exec(state, self.exec, res)
+        if self.exec != nil {
+            res = parser_exec(state, self.exec, res)
+        }
         state_save_pos(state)
         return res, nil
     }
@@ -178,10 +182,12 @@ combine :: proc(
         parser_skip(state, self.skip)
         pos := state.pos
         if res, err = parser_parse(state, self.parsers[0]); err != nil {
+            exec_tree_node_destroy(res)
             return nil, err
         }
+        exec_tree_node_destroy(res)
         state.pos = pos
-        res = parser_exec(state, self.exec, state_string(state))
+        res = parser_exec(state, self.exec)
         state_save_pos(state)
         return res, nil
     }
@@ -196,7 +202,6 @@ star :: proc(
 ) -> ^Parser {
     parse := proc(self: ^Parser, state: ^ParserState) -> (res: ParseResult, err: ParserError) {
         results := make([dynamic]ParseResult)
-        defer delete(results)
 
         parser_skip(state, self.skip)
         sub_state := state^
@@ -206,7 +211,7 @@ star :: proc(
             state_set(state, &sub_state)
         }
         if state.cur > state.pos {
-            res = parser_exec(state, self.exec, results[:])
+            res = parser_exec(state, self.exec, results)
             state_save_pos(state)
             return res, nil
         }
@@ -223,7 +228,6 @@ plus :: proc(
 ) -> ^Parser {
     parse := proc(self: ^Parser, state: ^ParserState) -> (res: ParseResult, err: ParserError) {
         results := make([dynamic]ParseResult)
-        defer delete(results)
 
         parser_skip(state, self.skip)
         sub_state := state^
@@ -233,7 +237,7 @@ plus :: proc(
             state_set(state, &sub_state)
         }
         if state.cur > state.pos {
-            res = parser_exec(state, self.exec, results[:])
+            res = parser_exec(state, self.exec, results)
             state_save_pos(state)
             return res, nil
         }
@@ -251,7 +255,6 @@ times :: proc(
 ) -> ^Parser {
     parse := proc(self: ^Parser, state: ^ParserState) -> (res: ParseResult, err: ParserError) {
         results := make([dynamic]ParseResult)
-        defer delete(results)
         count := 0
 
         parser_skip(state, self.skip)
@@ -263,7 +266,7 @@ times :: proc(
             count += 1
         }
         if count == nb_times {
-            res = parser_exec(state, self.exec, results[:])
+            res = parser_exec(state, self.exec, results)
             state_save_pos(state)
             return res, nil
         }
@@ -281,13 +284,13 @@ seq :: proc(
 ) -> ^Parser {
     parse := proc(self: ^Parser, state: ^ParserState) -> (res: ParseResult, err: ParserError) {
         results := make([dynamic]ParseResult)
-        defer delete(results)
         sub_state := state^
         sub_res: ParseResult
 
         for parser in self.parsers {
             parser_skip(&sub_state, self.skip)
             if sub_res, err = parser_parse(&sub_state, parser); err != nil {
+                exec_tree_node_destroy(sub_res)
                 switch e in err {
                 case InternalError:
                     return nil, err
@@ -299,7 +302,7 @@ seq :: proc(
             append(&results, sub_res)
             state_set(state, &sub_state)
         }
-        res = parser_exec(state, self.exec, results[:])
+        res = parser_exec(state, self.exec, results)
         state_save_pos(state)
         return res, nil
     }
@@ -323,24 +326,20 @@ or :: proc(
     parse := proc(self: ^Parser, state: ^ParserState) -> (res: ParseResult, err: ParserError) {
         parser_skip(state, self.skip)
 
-        state.bd.depth += 1
         for parser in self.parsers {
             sub_state := state^
-            if sub_res, sub_err := parser_parse(&sub_state, parser); sub_err == nil {
+            sub_res: ParseResult
+            sub_err: ParserError
+
+            if sub_res, sub_err = parser_parse(&sub_state, parser); sub_err == nil {
                 state_set(state, &sub_state)
-                state.bd.depth -= 1
-
-                if state.bd.depth == 0 {
-                    // TODO: execute
-                }
-
                 res = parser_exec(state, self.exec, sub_res)
                 state_save_pos(state)
                 return res, nil
             }
             free_all(state.error_allocator)
+            exec_tree_node_destroy(sub_res)
         }
-        state.bd.depth -= 1
         return nil, parser_error(SyntaxError, state, "none of the rules in `{}` could be applied.", self.name)
     }
     return parser_create(name, parse, skip, exec, parsers = parsers)
@@ -360,7 +359,9 @@ opt :: proc(
         }
         free_all(state.error_allocator)
         state_set(state, &sub_state)
-        res = parser_exec(state, self.exec, res)
+        if self.exec != nil {
+            res = parser_exec(state, self.exec, res)
+        }
         state_save_pos(state)
         return res, nil
     }
@@ -400,62 +401,59 @@ lrec :: proc(
         terminal_rule := self.parsers[len(self.parsers) - 1]
         middle_rules := self.parsers[1:len(self.parsers) - 1]
 
-        state.rd.current_node = new(ExecTree, state.rd.tree_allocator)
-
         state.rd.depth += 1
 
         // apply terminal rule
         parser_skip(state, self.skip)
-        if _, err = parser_parse(state, terminal_rule); err != nil {
+        if res, err = parser_parse(state, terminal_rule); err != nil {
+            exec_tree_node_destroy(res)
             return nil, err
         }
 
         if recursive_rule in state.rd.exec_trees {
-            state.rd.exec_trees[recursive_rule].rhs = state.rd.current_node
+            state.rd.exec_trees[recursive_rule].childs[len(self.parsers) - 1] = res
             state.rd.exec_trees[recursive_rule].ctx.state.cur = state.pos
-            state.rd.current_node = state.rd.exec_trees[recursive_rule]
+            res = state.rd.exec_trees[recursive_rule]
         }
 
         // success if eof and no operator
         parser_skip(state, self.skip)
         if state_eof(state) && len(middle_rules) == 0 {
             delete_key(&state.rd.exec_trees, recursive_rule)
-            return nil, nil
+            return res, nil
         }
 
-        node := new(ExecTree, state.rd.tree_allocator)
-        node.lhs = state.rd.current_node
-        state.rd.current_node = node
+        childs := make([dynamic]^ExecTreeNode, len(self.parsers))
+        childs[0] = res
 
         // apply middle rules
-        for parser in middle_rules {
-            if _, err = parser_parse(state, parser); err != nil {
+        for parser, idx in middle_rules {
+            parser_skip(state, self.skip)
+            if res, err = parser_parse(state, parser); err != nil {
+                exec_tree_node_destroy(res)
                 return nil, err
             }
-            parser_skip(state, self.skip)
+            childs[1 + idx] = res
         }
 
-        res = nil
-        parser_exec(state, self.exec, res)
-        node.ctx.state.pos = node.lhs.ctx.state.pos
-        state.rd.exec_trees[recursive_rule] = node
-
-        state.rd.current_node = new(ExecTree, state.rd.tree_allocator)
+        parser_skip(state, self.skip)
+        res = parser_exec(state, self.exec, childs)
+        res.ctx.state.pos = childs[0].ctx.state.pos
+        state.rd.exec_trees[recursive_rule] = res
 
         // apply recursive rule
-        if _, err = parser_parse(state, recursive_rule); err != nil {
+        if res, err = parser_parse(state, recursive_rule); err != nil {
+            exec_tree_node_destroy(res)
             return nil, err
         }
 
         state.rd.depth -= 1
         if recursive_rule in state.rd.exec_trees {
-            state.rd.current_node = state.rd.exec_trees[recursive_rule]
+            res = state.rd.exec_trees[recursive_rule]
             delete_key(&state.rd.exec_trees, recursive_rule)
         }
 
         if state.rd.depth == 0 {
-            res = parser_exec_from_exec_tree(state.rd.current_node)
-            state.rd.current_node = nil
             clear(&state.rd.exec_trees)
         }
         return res, nil
@@ -468,13 +466,14 @@ rec :: proc(parser: ^Parser) -> ^Parser {
         recursive_rule := self.parsers[0]
 
         old_exec_trees := state.rd.exec_trees
-        state.rd.exec_trees = make(map[^Parser]^ExecTree)
+        state.rd.exec_trees = make(map[^Parser]^ExecTreeNode)
         defer {
             delete(state.rd.exec_trees)
             state.rd.exec_trees = old_exec_trees
         }
 
         if res, err = parser_parse(state, self.parsers[0]); err != nil {
+            exec_tree_node_destroy(res)
             return nil, err
         }
         return res, nil

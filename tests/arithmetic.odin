@@ -123,7 +123,8 @@ node_eval :: proc(node: ^Node) -> f32 {
 // exec functions //////////////////////////////////////////////////////////////
 
 exec_value :: proc($type: typeid) -> pcl.ExecProc {
-    return  proc(content: []pcl.ParseResult, exec_data: rawptr) -> pcl.ParseResult {
+    return  proc(content: []pcl.ExecResult, exec_data: rawptr) -> pcl.ExecResult {
+        fmt.printfln("value: {}", content)
         ed := cast(^ExecData)exec_data
         node := new(Node, ed.node_allocator)
         node^ = cast(Value)(cast(type)strconv.atof(content[0].(string)))
@@ -132,36 +133,39 @@ exec_value :: proc($type: typeid) -> pcl.ExecProc {
 }
 
 exec_operator :: proc($op: Operator) -> pcl.ExecProc {
-    return proc(content: []pcl.ParseResult, exec_data: rawptr) -> pcl.ParseResult {
+    return proc(content: []pcl.ExecResult, exec_data: rawptr) -> pcl.ExecResult {
+        fmt.printfln("operator: {}", content)
         ed := cast(^ExecData)exec_data
         node := new(Node, ed.node_allocator)
         node^ = Operation{
             kind = op,
             lhs = cast(^Node)content[0].(rawptr),
-            rhs = cast(^Node)content[1].(rawptr),
+            rhs = cast(^Node)content[2].(rawptr),
         }
         return cast(rawptr)node
     }
 }
 
 exec_function :: proc($id: FunctionId) -> pcl.ExecProc {
-    return proc(content: []pcl.ParseResult, exec_data: rawptr) -> pcl.ParseResult {
+    return proc(content: []pcl.ExecResult, exec_data: rawptr) -> pcl.ExecResult {
+        fmt.printfln("function: {}", content)
         ed := cast(^ExecData)exec_data
         node := new(Node, ed.node_allocator)
         node^ = Function{
             id = id,
-            expr = cast(^Node)content[0].(rawptr),
+            expr = cast(^Node)content[1].(rawptr),
         }
         return cast(rawptr)node
     }
 }
 
-exec_parent :: proc(content: []pcl.ParseResult, exec_data: rawptr) -> pcl.ParseResult {
+exec_parent :: proc(content: []pcl.ExecResult, exec_data: rawptr) -> pcl.ExecResult {
+    fmt.println(content)
     ed := cast(^ExecData)exec_data
     node := new(Node, ed.node_allocator)
-    fmt.printfln("exec_parent: {}", content)
+    fmt.printfln("parent: {}", content)
     node^ = Parent{
-        expr = cast(^Node)content[0].(rawptr),
+        expr = cast(^Node)content[1].(rawptr),
     }
     return cast(rawptr)node
 }
@@ -285,14 +289,13 @@ test_functions :: proc(t: ^testing.T) {
     mem.arena_init(&node_arena, node_arena_data[:])
     exec_data := ExecData{ mem.arena_allocator(&node_arena) }
 
-    // BUG: there is an inconsistency when running the sequential parsers when beeing in recusion mode or not
-    // state, res, ok := pcl.parse_string(arithmetic_parser, "sin(3.14)", &exec_data)
-    // testing.expect(t, ok == true)
-    // testing.expect(t, node_eval(cast(^Node)res.(rawptr)) == math.sin_f32(3.14))
-    //
-    // mem.arena_free_all(&node_arena)
+    state, res, ok := pcl.parse_string(arithmetic_parser, "sin(3.14)", &exec_data)
+    testing.expect(t, ok == true)
+    testing.expect(t, node_eval(cast(^Node)res.(rawptr)) == math.sin_f32(3.14))
 
-    state, res, ok := pcl.parse_string(arithmetic_parser, "sin(1 - (2 + 3*12.4)) - 3*3 - cos(3*4) + 4/2 + (2 + 2)", &exec_data)
+    mem.arena_free_all(&node_arena)
+
+    state, res, ok = pcl.parse_string(arithmetic_parser, "sin(1 - (2 + 3*12.4)) - 3*3 - cos(3*4) + 4/2 + (2 + 2)", &exec_data)
     testing.expect(t, ok == true)
     eval := node_eval(cast(^Node)res.(rawptr))
     expected := math.sin_f32(1 - (2 + 3*12.4)) - 3*3 - math.cos_f32(3*4) + 4/2 + (2 + 2)

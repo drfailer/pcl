@@ -7,18 +7,6 @@ import "core:unicode/utf8"
 import "core:log"
 import "core:mem"
 
-ExecContext :: struct {
-    exec: ExecProc,
-    state: ParserState,
-}
-
-// old:
-ExecTree :: struct {
-    lhs: ^ExecTree,
-    rhs: ^ExecTree,
-    ctx: ExecContext,
-}
-
 // parser state ////////////////////////////////////////////////////////////////
 
 Location :: struct {
@@ -29,20 +17,8 @@ Location :: struct {
 
 // use for left recursive grammars
 RecursionData :: struct {
-    exec_trees: map[^Parser]^ExecTree,
-    current_node: ^ExecTree,
     depth: u64,
-    tree_allocator: mem.Allocator,
-}
-
-// QUESTION: can we solve the left recursion and the branching using the same data structure?
-
-// use when branching
-BranchingData :: struct {
-    depth: u64,
-    // TODO: allocator
-    // QUESTION: can we cache the states so that we don't have to parse the content multiple times when we see similar paths
-    // NOTE: such an optimization will not replace a grammar optimization
+    exec_trees: map[^Parser]^ExecTreeNode,
 }
 
 ParserState :: struct {
@@ -52,7 +28,6 @@ ParserState :: struct {
     loc: Location,
     exec_data: rawptr,
     rd: RecursionData,
-    bd: BranchingData,
     error_allocator: mem.Allocator,
     // TODO: global_state: ^GlobalParserState,
 }
@@ -67,7 +42,7 @@ state_create :: proc(
     content: ^string,
     exec_data: rawptr,
     error_allocator: mem.Allocator,
-    tree_allocator: mem.Allocator,
+    tree_allocator: mem.Allocator, // TODO: should serve to allocate tree nodes
 ) -> ParserState {
     return ParserState{
         content = content,
@@ -76,9 +51,9 @@ state_create :: proc(
         loc = Location{1, 1, ""},
         exec_data = exec_data,
         error_allocator = error_allocator,
-        rd = RecursionData {
-            tree_allocator = tree_allocator
-        },
+        // rd = RecursionData {
+        //     tree_allocator = tree_allocator
+        // },
     }
 }
 
