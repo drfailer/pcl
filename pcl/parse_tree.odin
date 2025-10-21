@@ -36,7 +36,9 @@ exec_tree_node_execute :: proc(node: ^ExecTreeNode, allocator: mem.Allocator) ->
         childs_results := make([dynamic]ExecResult, allocator = allocator)
 
         for child in node.childs {
-            append(&childs_results, exec_tree_node_execute(child, allocator))
+            if child != nil {
+                append(&childs_results, exec_tree_node_execute(child, allocator))
+            }
         }
 
         if node.ctx.exec == nil {
