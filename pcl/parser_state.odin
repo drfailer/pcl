@@ -22,6 +22,7 @@ RecursionData :: struct {
 }
 
 GlobalParserState :: struct {
+    rd: RecursionData,
     error_allocator: mem.Allocator,
     tree_allocator: mem.Allocator,
 }
@@ -32,16 +33,12 @@ ParserState :: struct {
     cur: int,
     loc: Location,
     exec_data: rawptr,
-    rd: RecursionData,
-    // error_allocator: mem.Allocator,
-    // tree_allocator: mem.Allocator,
     global_state: ^GlobalParserState,
 }
 
 state_set :: proc(dest: ^ParserState, src: ^ParserState) {
     dest.loc = src.loc
     dest.cur = src.cur
-    dest.rd = src.rd
 }
 
 state_create :: proc(content: ^string, exec_data: rawptr, global_state: ^GlobalParserState) -> ParserState {
@@ -56,7 +53,6 @@ state_create :: proc(content: ^string, exec_data: rawptr, global_state: ^GlobalP
 }
 
 state_destroy :: proc(state: ^ParserState) {
-    delete(state.rd.exec_trees)
 }
 
 state_eat_one :: proc(state: ^ParserState) -> (ok: bool) {

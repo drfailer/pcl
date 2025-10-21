@@ -101,18 +101,25 @@ parse_string :: proc(
     bytes: [4096]u8
     error_arena: mem.Arena
     mem.arena_init(&error_arena, bytes[:])
+    error_allocator := mem.arena_allocator(&error_arena)
 
     // allocator for the exec tree
     tree_arena: mem.Dynamic_Arena
     mem.dynamic_arena_init(&tree_arena)
     defer mem.dynamic_arena_destroy(&tree_arena)
+    tree_allocator := mem.dynamic_arena_allocator(&tree_arena)
 
     // execute the given parser on the string and print error
     str := str
     global_state := GlobalParserState{
-        error_allocator = mem.arena_allocator(&error_arena),
-        tree_allocator = mem.dynamic_arena_allocator(&tree_arena),
+        rd = RecursionData{
+            depth = 0,
+            exec_trees = make(map[^Parser]^ExecTreeNode),
+        },
+        error_allocator = error_allocator,
+        tree_allocator = tree_allocator,
     }
+    defer delete(global_state.rd.exec_trees)
     state = state_create(&str, exec_data, &global_state)
     defer state_destroy(&state)
     exec_tree, err := parser_parse(&state, parser)

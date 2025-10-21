@@ -395,7 +395,7 @@ lrec :: proc(
         terminal_rule := self.parsers[len(self.parsers) - 1]
         middle_rules := self.parsers[1:len(self.parsers) - 1]
 
-        state.rd.depth += 1
+        state.global_state.rd.depth += 1
 
         // apply terminal rule
         parser_skip(state, self.skip)
@@ -403,16 +403,16 @@ lrec :: proc(
             return nil, err
         }
 
-        if recursive_rule in state.rd.exec_trees {
-            state.rd.exec_trees[recursive_rule].childs[len(self.parsers) - 1] = res
-            state.rd.exec_trees[recursive_rule].ctx.state.cur = state.pos
-            res = state.rd.exec_trees[recursive_rule]
+        if recursive_rule in state.global_state.rd.exec_trees {
+            state.global_state.rd.exec_trees[recursive_rule].childs[len(self.parsers) - 1] = res
+            state.global_state.rd.exec_trees[recursive_rule].ctx.state.cur = state.pos
+            res = state.global_state.rd.exec_trees[recursive_rule]
         }
 
         // success if eof and no operator
         parser_skip(state, self.skip)
         if state_eof(state) && len(middle_rules) == 0 {
-            delete_key(&state.rd.exec_trees, recursive_rule)
+            delete_key(&state.global_state.rd.exec_trees, recursive_rule)
             return res, nil
         }
 
@@ -432,21 +432,21 @@ lrec :: proc(
         parser_skip(state, self.skip)
         res = parser_exec(state, self.exec, childs)
         res.ctx.state.pos = childs[0].ctx.state.pos
-        state.rd.exec_trees[recursive_rule] = res
+        state.global_state.rd.exec_trees[recursive_rule] = res
 
         // apply recursive rule
         if res, err = parser_parse(state, recursive_rule); err != nil {
             return nil, err
         }
 
-        state.rd.depth -= 1
-        if recursive_rule in state.rd.exec_trees {
-            res = state.rd.exec_trees[recursive_rule]
-            delete_key(&state.rd.exec_trees, recursive_rule)
+        state.global_state.rd.depth -= 1
+        if recursive_rule in state.global_state.rd.exec_trees {
+            res = state.global_state.rd.exec_trees[recursive_rule]
+            delete_key(&state.global_state.rd.exec_trees, recursive_rule)
         }
 
-        if state.rd.depth == 0 {
-            clear(&state.rd.exec_trees)
+        if state.global_state.rd.depth == 0 {
+            clear(&state.global_state.rd.exec_trees)
         }
         return res, nil
     }
@@ -457,11 +457,11 @@ rec :: proc(parser: ^Parser) -> ^Parser {
     parse := proc(self: ^Parser, state: ^ParserState) -> (res: ParseResult, err: ParserError) {
         recursive_rule := self.parsers[0]
 
-        old_exec_trees := state.rd.exec_trees
-        state.rd.exec_trees = make(map[^Parser]^ExecTreeNode)
+        old_exec_trees := state.global_state.rd.exec_trees
+        state.global_state.rd.exec_trees = make(map[^Parser]^ExecTreeNode)
         defer {
-            delete(state.rd.exec_trees)
-            state.rd.exec_trees = old_exec_trees
+            delete(state.global_state.rd.exec_trees)
+            state.global_state.rd.exec_trees = old_exec_trees
         }
 
         if res, err = parser_parse(state, self.parsers[0]); err != nil {

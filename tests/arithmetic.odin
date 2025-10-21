@@ -8,6 +8,8 @@ import "core:math"
 import "core:mem"
 import "core:log"
 
+DEBUG :: false
+
 Operator :: enum {
     Add,
     Sub,
@@ -124,7 +126,9 @@ node_eval :: proc(node: ^Node) -> f32 {
 
 exec_value :: proc($type: typeid) -> pcl.ExecProc {
     return  proc(content: []pcl.ExecResult, exec_data: rawptr) -> pcl.ExecResult {
-        fmt.printfln("value: {}", content)
+        when DEBUG {
+            fmt.printfln("value: {}", content)
+        }
         ed := cast(^ExecData)exec_data
         node := new(Node, ed.node_allocator)
         node^ = cast(Value)(cast(type)strconv.atof(content[0].(string)))
@@ -134,7 +138,9 @@ exec_value :: proc($type: typeid) -> pcl.ExecProc {
 
 exec_operator :: proc($op: Operator) -> pcl.ExecProc {
     return proc(content: []pcl.ExecResult, exec_data: rawptr) -> pcl.ExecResult {
-        fmt.printfln("operator: {}", content)
+        when DEBUG {
+            fmt.printfln("operator: {}", content)
+        }
         ed := cast(^ExecData)exec_data
         node := new(Node, ed.node_allocator)
         node^ = Operation{
@@ -148,7 +154,9 @@ exec_operator :: proc($op: Operator) -> pcl.ExecProc {
 
 exec_function :: proc($id: FunctionId) -> pcl.ExecProc {
     return proc(content: []pcl.ExecResult, exec_data: rawptr) -> pcl.ExecResult {
-        fmt.printfln("function: {}", content)
+        when DEBUG {
+            fmt.printfln("function: {}", content)
+        }
         ed := cast(^ExecData)exec_data
         node := new(Node, ed.node_allocator)
         node^ = Function{
@@ -160,10 +168,11 @@ exec_function :: proc($id: FunctionId) -> pcl.ExecProc {
 }
 
 exec_parent :: proc(content: []pcl.ExecResult, exec_data: rawptr) -> pcl.ExecResult {
-    fmt.println(content)
+    when DEBUG {
+        fmt.printfln("parent: {}", content)
+    }
     ed := cast(^ExecData)exec_data
     node := new(Node, ed.node_allocator)
-    fmt.printfln("parent: {}", content)
     node^ = Parent{
         expr = cast(^Node)content[1].(rawptr),
     }
@@ -303,11 +312,11 @@ test_functions :: proc(t: ^testing.T) {
 }
 
 main :: proc() {
-    // print_tree_of_expression("123.3")
-    // print_tree_of_expression("234 + 356 - 123")
-    // print_tree_of_expression("1 - (2 + 3)")
-    // print_tree_of_expression("(1 - 2) - 3*3 + 4/2")
-    // print_tree_of_expression("(1 - (2 + 3*12.4)) - 3*3 + 4/2")
-    // print_tree_of_expression("(1 - (2 + 3*12.4)) - 3*3 - (3*4) + 4/2 + (2 + 2)")
+    print_tree_of_expression("123.3")
+    print_tree_of_expression("234 + 356 - 123")
+    print_tree_of_expression("1 - (2 + 3)")
+    print_tree_of_expression("(1 - 2) - 3*3 + 4/2")
+    print_tree_of_expression("(1 - (2 + 3*12.4)) - 3*3 + 4/2")
+    print_tree_of_expression("(1 - (2 + 3*12.4)) - 3*3 - (3*4) + 4/2 + (2 + 2)")
     print_tree_of_expression("1 + sin(1 - (2 + 3*12.4)) - 3*3 - cos(3*4) + 4/2 + (2 + 2)")
 }
