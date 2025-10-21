@@ -60,7 +60,8 @@ cond :: proc(
         ok: bool
 
         if state_eof(state) {
-            return nil, SyntaxError{"cannot apply predicated because eof was found."}
+            return nil, parser_error(SyntaxError, state, "`{}`, cannot apply predicated (eof was found).",
+                                     self.name)
         }
 
         parser_skip(state, self.skip)
@@ -72,7 +73,8 @@ cond :: proc(
             state_save_pos(state)
             return res, nil
         }
-        return nil, SyntaxError{"cannot apply predicate."}
+        return nil, parser_error(SyntaxError, state, "`{}`, cannot apply predicated.",
+                                 self.name)
     }
     return parser_create(name, parse, skip, exec, pred = pred)
 }
