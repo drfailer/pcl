@@ -201,7 +201,7 @@ star :: proc(
     name: string = "star",
 ) -> ^Parser {
     parse := proc(self: ^Parser, state: ^ParserState) -> (res: ParseResult, err: ParserError) {
-        results := make([dynamic]ParseResult)
+        results := make([dynamic]ParseResult, allocator = state.global_state.tree_allocator)
 
         parser_skip(state, self.skip)
         sub_state := state^
@@ -227,7 +227,7 @@ plus :: proc(
     name: string = "plus",
 ) -> ^Parser {
     parse := proc(self: ^Parser, state: ^ParserState) -> (res: ParseResult, err: ParserError) {
-        results := make([dynamic]ParseResult)
+        results := make([dynamic]ParseResult, allocator = state.global_state.tree_allocator)
 
         parser_skip(state, self.skip)
         sub_state := state^
@@ -254,7 +254,7 @@ times :: proc(
     name: string = "times",
 ) -> ^Parser {
     parse := proc(self: ^Parser, state: ^ParserState) -> (res: ParseResult, err: ParserError) {
-        results := make([dynamic]ParseResult)
+        results := make([dynamic]ParseResult, allocator = state.global_state.tree_allocator)
         count := 0
 
         parser_skip(state, self.skip)
@@ -283,7 +283,7 @@ seq :: proc(
     name: string = "seq",
 ) -> ^Parser {
     parse := proc(self: ^Parser, state: ^ParserState) -> (res: ParseResult, err: ParserError) {
-        results := make([dynamic]ParseResult)
+        results := make([dynamic]ParseResult, allocator = state.global_state.tree_allocator)
         sub_state := state^
         sub_res: ParseResult
 
@@ -337,7 +337,7 @@ or :: proc(
                 state_save_pos(state)
                 return res, nil
             }
-            free_all(state.error_allocator)
+            free_all(state.global_state.error_allocator)
             exec_tree_node_destroy(sub_res)
         }
         return nil, parser_error(SyntaxError, state, "none of the rules in `{}` could be applied.", self.name)
@@ -357,7 +357,7 @@ opt :: proc(
         if res, err = parser_parse(&sub_state, self.parsers[0]); err != nil {
             return nil, nil
         }
-        free_all(state.error_allocator)
+        free_all(state.global_state.error_allocator)
         state_set(state, &sub_state)
         if self.exec != nil {
             res = parser_exec(state, self.exec, res)
@@ -423,7 +423,8 @@ lrec :: proc(
             return res, nil
         }
 
-        childs := make([dynamic]^ExecTreeNode, len(self.parsers))
+
+        childs := make([dynamic]^ExecTreeNode, len(self.parsers), allocator = state.global_state.tree_allocator)
         childs[0] = res
 
         // apply middle rules

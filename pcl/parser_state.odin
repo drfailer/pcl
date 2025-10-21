@@ -21,6 +21,11 @@ RecursionData :: struct {
     exec_trees: map[^Parser]^ExecTreeNode,
 }
 
+GlobalParserState :: struct {
+    error_allocator: mem.Allocator,
+    tree_allocator: mem.Allocator,
+}
+
 ParserState :: struct {
     content: ^string,
     pos: int,
@@ -28,8 +33,9 @@ ParserState :: struct {
     loc: Location,
     exec_data: rawptr,
     rd: RecursionData,
-    error_allocator: mem.Allocator,
-    // TODO: global_state: ^GlobalParserState,
+    // error_allocator: mem.Allocator,
+    // tree_allocator: mem.Allocator,
+    global_state: ^GlobalParserState,
 }
 
 state_set :: proc(dest: ^ParserState, src: ^ParserState) {
@@ -38,22 +44,14 @@ state_set :: proc(dest: ^ParserState, src: ^ParserState) {
     dest.rd = src.rd
 }
 
-state_create :: proc(
-    content: ^string,
-    exec_data: rawptr,
-    error_allocator: mem.Allocator,
-    tree_allocator: mem.Allocator, // TODO: should serve to allocate tree nodes
-) -> ParserState {
+state_create :: proc(content: ^string, exec_data: rawptr, global_state: ^GlobalParserState) -> ParserState {
     return ParserState{
         content = content,
         pos = 0,
         cur = 0,
         loc = Location{1, 1, ""},
         exec_data = exec_data,
-        error_allocator = error_allocator,
-        // rd = RecursionData {
-        //     tree_allocator = tree_allocator
-        // },
+        global_state = global_state,
     }
 }
 

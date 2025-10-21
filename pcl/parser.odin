@@ -21,7 +21,7 @@ ParserError :: union {
 
 parser_error :: proc($error_type: typeid, state: ^ParserState, str: string, args: ..any) -> ParserError {
     return error_type{
-        fmt.aprintf(str, ..args, allocator = state.error_allocator)
+        fmt.aprintf(str, ..args, allocator = state.global_state.error_allocator)
     }
 }
 
@@ -99,8 +99,8 @@ parse_string :: proc(
 ) -> (state: ParserState, res: ExecResult, ok: bool) {
     // create the arena for the temporary allocations (error messages)
     bytes: [4096]u8
-    arena: mem.Arena
-    mem.arena_init(&arena, bytes[:])
+    error_arena: mem.Arena
+    mem.arena_init(&error_arena, bytes[:])
 
     // allocator for the exec tree
     tree_arena: mem.Dynamic_Arena
@@ -109,7 +109,11 @@ parse_string :: proc(
 
     // execute the given parser on the string and print error
     str := str
-    state = state_create(&str, exec_data, mem.arena_allocator(&arena), mem.dynamic_arena_allocator(&tree_arena))
+    global_state := GlobalParserState{
+        error_allocator = mem.arena_allocator(&error_arena),
+        tree_allocator = mem.dynamic_arena_allocator(&tree_arena),
+    }
+    state = state_create(&str, exec_data, &global_state)
     defer state_destroy(&state)
     exec_tree, err := parser_parse(&state, parser)
 
@@ -128,7 +132,12 @@ parse_string :: proc(
         state_print_context(&state)
         ok = false
     } else {
-        res = exec_tree_node_execute(exec_tree)
+        // allocator for the exec tree
+        exec_arena: mem.Dynamic_Arena
+        mem.dynamic_arena_init(&exec_arena)
+        defer mem.dynamic_arena_destroy(&exec_arena)
+
+        res = exec_tree_node_execute(exec_tree, mem.dynamic_arena_allocator(&exec_arena))
         exec_tree_node_destroy(exec_tree)
     }
     return state, res, ok
@@ -164,14 +173,15 @@ parser_skip :: proc(state: ^ParserState, parser_skip: PredProc) {
 // exec tree functions /////////////////////////////////////////////////////////
 
 parser_exec_with_childs :: proc(state: ^ParserState, exec: ExecProc, childs: [dynamic]ParseResult) -> ParseResult {
-    node := new(ExecTreeNode)
+    node := new(ExecTreeNode, state.global_state.tree_allocator)
+    // node := new(ExecTreeNode)
     node.ctx = ExecContext{exec, state^}
     node.childs = childs
     return node
 }
 
 parser_exec_with_child :: proc(state: ^ParserState, exec: ExecProc, result: ParseResult) -> ParseResult {
-    results := make([dynamic]ParseResult)
+    results := make([dynamic]ParseResult, allocator = state.global_state.tree_allocator)
     append(&results, result)
     return parser_exec_with_childs(state, exec, results)
 }
@@ -179,25 +189,6 @@ parser_exec_with_child :: proc(state: ^ParserState, exec: ExecProc, result: Pars
 parser_exec_no_child :: proc(state: ^ParserState, exec: ExecProc) -> ParseResult {
     return parser_exec_with_childs(state, exec, [dynamic]ParseResult{})
 }
-
-// parser_exec_from_exec_tree :: proc(tree: ^ExecTree) -> ParseResult {
-//     if tree == nil {
-//         return nil
-//     }
-//     // defer free(tree)
-//     if tree.rhs == nil && tree.lhs == nil {
-//         return tree.ctx.exec([]ParseResult{state_string(&tree.ctx.state)}, tree.ctx.state.exec_data)
-//     }
-//     lhs_res := parser_exec_from_exec_tree(tree.lhs)
-//     rhs_res := parser_exec_from_exec_tree(tree.rhs)
-//
-//     results := make([dynamic]ParseResult)
-//     defer delete(results)
-//
-//     if lhs_res != nil do append(&results, lhs_res)
-//     if rhs_res != nil do append(&results, rhs_res)
-//     return tree.ctx.exec(results[:], tree.ctx.state.exec_data)
-// }
 
 parser_exec :: proc {
     parser_exec_with_childs,
