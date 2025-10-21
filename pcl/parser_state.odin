@@ -40,6 +40,7 @@ RecursionData :: struct {
 BranchingData :: struct {
     count: u64,
     execs: [dynamic]ExecContext,
+    depth: u64,
     // TODO: allocator
     // QUESTION: can we cache the states so that we don't have to parse the content multiple times when we see similar paths
     // NOTE: such an optimization will not replace a grammar optimization

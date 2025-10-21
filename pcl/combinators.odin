@@ -322,18 +322,25 @@ or :: proc(
 ) -> ^Parser {
     parse := proc(self: ^Parser, state: ^ParserState) -> (res: ParseResult, err: ParserError) {
         parser_skip(state, self.skip)
+
+        state.bd.depth += 1
         for parser in self.parsers {
             sub_state := state^
-            // TODO: sub_state.execute = false;
             if sub_res, sub_err := parser_parse(&sub_state, parser); sub_err == nil {
                 state_set(state, &sub_state)
+                state.bd.depth -= 1
+
+                if state.bd.depth == 0 {
+                    // TODO: execute
+                }
+
                 res = parser_exec(state, self.exec, sub_res)
                 state_save_pos(state)
                 return res, nil
             }
             free_all(state.error_allocator)
         }
-        // TODO: execute the last rules
+        state.bd.depth -= 1
         return nil, parser_error(SyntaxError, state, "none of the rules in `{}` could be applied.", self.name)
     }
     return parser_create(name, parse, skip, exec, parsers = parsers)
