@@ -30,6 +30,7 @@ parser_error :: proc($error_type: typeid, state: ^ParserState, str: string, args
 ParseResult :: union {
     string,
     rawptr,
+    [dynamic]ParseResult,
 }
 
 ExecProc :: proc(results: []ParseResult, exec_data: rawptr) -> ParseResult
