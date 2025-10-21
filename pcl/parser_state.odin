@@ -18,7 +18,7 @@ Location :: struct {
 // use for left recursive grammars
 RecursionData :: struct {
     depth: u64,
-    exec_trees: map[^Parser]^ExecTreeNode,
+    top_nodes: map[^Parser]^ExecTreeNode,
 }
 
 GlobalParserState :: struct {

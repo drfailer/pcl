@@ -115,12 +115,12 @@ parse_string :: proc(
         exec_data = exec_data,
         rd = RecursionData{
             depth = 0,
-            exec_trees = make(map[^Parser]^ExecTreeNode),
+            top_nodes = make(map[^Parser]^ExecTreeNode),
         },
         error_allocator = error_allocator,
         tree_allocator = tree_allocator,
     }
-    defer delete(global_state.rd.exec_trees)
+    defer delete(global_state.rd.top_nodes)
     state = state_create(&str, &global_state)
     defer state_destroy(&state)
     exec_tree, err := parser_parse(&state, parser)
