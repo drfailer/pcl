@@ -22,7 +22,6 @@ declare :: proc(
 
         parser_skip(state, self.skip)
         if res, err = parser_parse(state, self.parsers[0]); err != nil {
-            exec_tree_node_destroy(res)
             return nil, err
         }
         return res, nil
@@ -147,7 +146,6 @@ single :: proc(
         parser_skip(state, self.skip)
         sub_state := state^
         if res, err = parser_parse(&sub_state, self.parsers[0]); err != nil {
-            exec_tree_node_destroy(res)
             return nil, err
         }
         state_set(state, &sub_state)
@@ -182,10 +180,8 @@ combine :: proc(
         parser_skip(state, self.skip)
         pos := state.pos
         if res, err = parser_parse(state, self.parsers[0]); err != nil {
-            exec_tree_node_destroy(res)
             return nil, err
         }
-        exec_tree_node_destroy(res)
         state.pos = pos
         res = parser_exec(state, self.exec)
         state_save_pos(state)
@@ -290,7 +286,6 @@ seq :: proc(
         for parser in self.parsers {
             parser_skip(&sub_state, self.skip)
             if sub_res, err = parser_parse(&sub_state, parser); err != nil {
-                exec_tree_node_destroy(sub_res)
                 switch e in err {
                 case InternalError:
                     return nil, err
@@ -338,7 +333,6 @@ or :: proc(
                 return res, nil
             }
             free_all(state.global_state.error_allocator)
-            exec_tree_node_destroy(sub_res)
         }
         return nil, parser_error(SyntaxError, state, "none of the rules in `{}` could be applied.", self.name)
     }
@@ -406,7 +400,6 @@ lrec :: proc(
         // apply terminal rule
         parser_skip(state, self.skip)
         if res, err = parser_parse(state, terminal_rule); err != nil {
-            exec_tree_node_destroy(res)
             return nil, err
         }
 
@@ -431,7 +424,6 @@ lrec :: proc(
         for parser, idx in middle_rules {
             parser_skip(state, self.skip)
             if res, err = parser_parse(state, parser); err != nil {
-                exec_tree_node_destroy(res)
                 return nil, err
             }
             childs[1 + idx] = res
@@ -444,7 +436,6 @@ lrec :: proc(
 
         // apply recursive rule
         if res, err = parser_parse(state, recursive_rule); err != nil {
-            exec_tree_node_destroy(res)
             return nil, err
         }
 
@@ -474,7 +465,6 @@ rec :: proc(parser: ^Parser) -> ^Parser {
         }
 
         if res, err = parser_parse(state, self.parsers[0]); err != nil {
-            exec_tree_node_destroy(res)
             return nil, err
         }
         return res, nil
