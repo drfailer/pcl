@@ -484,22 +484,23 @@ block :: proc(
     parse := proc(self: ^Parser, state: ^ParserState) -> (res: ParseResult, err: ParserError) {
         parser_skip(state, self.skip)
         if !state_cursor_on_string(state, opening) {
-            return SyntaxError{"execpted `" + opening + "`"}
+            return nil, SyntaxError{"execpted `" + opening + "`"}
         }
         state.cur += len(opening)
         count := 1
 
         for count > 0 {
             if state_eof(state) {
-                return SyntaxError{"failed to parse `block " + opening + " ... " + closing + "`"}
+                return nil, SyntaxError{"failed to parse `block " + opening + " ... " + closing + "`"}
             }
-            if !state_cursor_on_string(state, opening) {
+            if state_cursor_on_string(state, closing) {
+                count -= 1
+                state.cur += len(closing)
+            } else if state_cursor_on_string(state, opening) {
                 count += 1
                 state.cur += len(opening)
-            } else if !state_cursor_on_string(state, closing) {
-                count -= 1
             } else {
-                state.cur += len(closing)
+                state.cur += 1
             }
         }
         res = parser_exec(state, self.exec)

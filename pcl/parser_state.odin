@@ -99,8 +99,8 @@ state_string :: proc(state: ^ParserState) -> string {
 
 state_cursor_on_string :: proc(state: ^ParserState, $prefix: string) -> bool {
     state_idx := state.cur
-    for c in prefix {
-        if state_idx > len(state.content) || state.content[state_idx] != c {
+    for c, idx in prefix {
+        if state_idx > len(state.content) || state_char_at(state, state_idx) != c {
             return false
         }
         state_idx += 1
