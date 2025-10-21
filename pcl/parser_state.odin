@@ -22,6 +22,7 @@ RecursionData :: struct {
 }
 
 GlobalParserState :: struct {
+    // TODO: error_stack: [dynamic]ParserError
     exec_data: rawptr,
     rd: RecursionData,
     error_allocator: mem.Allocator,
@@ -116,7 +117,7 @@ find_line_start :: proc(state: ^ParserState) -> int {
 @(private="file")
 find_line_end :: proc(state: ^ParserState) -> int {
     for i := state.cur; i < len(state.content^); i += 1 {
-        if state_char_at(state, i) == '\n' do return i - 1
+        if state_char_at(state, i) == '\n' do return i
     }
     return len(state.content^)
 }
