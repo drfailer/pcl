@@ -112,6 +112,7 @@ parse_string :: proc(
     // execute the given parser on the string and print error
     str := str
     global_state := GlobalParserState{
+        exec_data = exec_data,
         rd = RecursionData{
             depth = 0,
             exec_trees = make(map[^Parser]^ExecTreeNode),
@@ -120,7 +121,7 @@ parse_string :: proc(
         tree_allocator = tree_allocator,
     }
     defer delete(global_state.rd.exec_trees)
-    state = state_create(&str, exec_data, &global_state)
+    state = state_create(&str, &global_state)
     defer state_destroy(&state)
     exec_tree, err := parser_parse(&state, parser)
 

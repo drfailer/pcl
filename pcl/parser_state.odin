@@ -22,6 +22,7 @@ RecursionData :: struct {
 }
 
 GlobalParserState :: struct {
+    exec_data: rawptr,
     rd: RecursionData,
     error_allocator: mem.Allocator,
     tree_allocator: mem.Allocator,
@@ -32,7 +33,6 @@ ParserState :: struct {
     pos: int,
     cur: int,
     loc: Location,
-    exec_data: rawptr,
     global_state: ^GlobalParserState,
 }
 
@@ -41,13 +41,12 @@ state_set :: proc(dest: ^ParserState, src: ^ParserState) {
     dest.cur = src.cur
 }
 
-state_create :: proc(content: ^string, exec_data: rawptr, global_state: ^GlobalParserState) -> ParserState {
+state_create :: proc(content: ^string, global_state: ^GlobalParserState) -> ParserState {
     return ParserState{
         content = content,
         pos = 0,
         cur = 0,
         loc = Location{1, 1, ""},
-        exec_data = exec_data,
         global_state = global_state,
     }
 }

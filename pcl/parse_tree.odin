@@ -30,7 +30,7 @@ exec_tree_node_execute :: proc(node: ^ExecTreeNode, allocator: mem.Allocator) ->
         if node.ctx.exec == nil {
             return state_string(&node.ctx.state)
         } else {
-            return node.ctx.exec([]ExecResult{state_string(&node.ctx.state)}, node.ctx.state.exec_data)
+            return node.ctx.exec([]ExecResult{state_string(&node.ctx.state)}, node.ctx.state.global_state.exec_data)
         }
     } else {
         childs_results := make([dynamic]ExecResult, allocator = allocator)
@@ -45,7 +45,7 @@ exec_tree_node_execute :: proc(node: ^ExecTreeNode, allocator: mem.Allocator) ->
             }
             return childs_results
         } else {
-            return node.ctx.exec(childs_results[:], node.ctx.state.exec_data)
+            return node.ctx.exec(childs_results[:], node.ctx.state.global_state.exec_data)
         }
     }
     return nil
