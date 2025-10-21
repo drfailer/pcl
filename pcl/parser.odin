@@ -28,9 +28,9 @@ parser_error :: proc($error_type: typeid, state: ^ParserState, str: string, args
 // parser //////////////////////////////////////////////////////////////////////
 
 ParseResult :: union {
-    string,
-    rawptr,
-    [dynamic]ParseResult,
+    string,               // sub-string of the state
+    rawptr,               // user pointer
+    [dynamic]ParseResult, // multiple results
 }
 
 ExecProc :: proc(results: []ParseResult, exec_data: rawptr) -> ParseResult
@@ -88,6 +88,55 @@ parser_create :: proc(
     return parser
 }
 
+// parse api ///////////////////////////////////////////////////////////////////
+
+parse_string :: proc(
+    parser: ^Parser,
+    str: string,
+    exec_data: rawptr = nil,
+) -> (state: ParserState, res: ParseResult, ok: bool) {
+    // create the arena for the temporary allocations (error messages)
+    bytes: [4096]u8
+    arena: mem.Arena
+    mem.arena_init(&arena, bytes[:])
+
+    // allocator for the exec tree
+    tree_arena: mem.Dynamic_Arena
+    mem.dynamic_arena_init(&tree_arena)
+    defer mem.dynamic_arena_destroy(&tree_arena)
+
+    // execute the given parser on the string and print error
+    err: ParserError
+    str := str
+    state = state_create(&str, exec_data, mem.arena_allocator(&arena), mem.dynamic_arena_allocator(&tree_arena))
+    defer state_destroy(&state)
+    res, err = parser_parse(&state, parser)
+
+    ok = true
+    if err != nil {
+        switch e in err {
+        case SyntaxError:
+            fmt.printfln("syntax error: {}", e.message)
+            state_print_context(&state)
+        case InternalError:
+            fmt.printfln("internal error: {}", e.message)
+        }
+        ok = false
+    } else if !state_eof(&state) {
+        fmt.printfln("syntax error: the parser did not consume all the string.")
+        state_print_context(&state)
+        ok = false
+    }
+    return state, res, ok
+}
+
+// print grammar ///////////////////////////////////////////////////////////////
+
+parser_print :: proc(parser: ^Parser) {
+    // TODO
+    // we need a combinator type in the parser
+}
+
 // helper functions ////////////////////////////////////////////////////////////
 
 parser_parse :: proc(state: ^ParserState, parser: ^Parser) -> (res: ParseResult, err: ParserError) {
@@ -107,6 +156,8 @@ parser_skip :: proc(state: ^ParserState, parser_skip: PredProc) {
         state_advance(state)
     }
 }
+
+// exec tree functions /////////////////////////////////////////////////////////
 
 parser_exec_with_results :: proc(state: ^ParserState, exec: ExecProc, results: []ParseResult) -> ParseResult {
     if state.rd.depth > 0 {
@@ -156,53 +207,4 @@ parser_exec_from_exec_tree :: proc(tree: ^ExecTree) -> ParseResult {
 parser_exec :: proc {
     parser_exec_with_results,
     parser_exec_single_result,
-}
-
-// parse api ///////////////////////////////////////////////////////////////////
-
-parse_string :: proc(
-    parser: ^Parser,
-    str: string,
-    exec_data: rawptr = nil,
-) -> (state: ParserState, res: ParseResult, ok: bool) {
-    // create the arena for the temporary allocations (error messages)
-    bytes: [4096]u8
-    arena: mem.Arena
-    mem.arena_init(&arena, bytes[:])
-
-    // allocator for the exec tree
-    tree_arena: mem.Dynamic_Arena
-    mem.dynamic_arena_init(&tree_arena)
-    defer mem.dynamic_arena_destroy(&tree_arena)
-
-    // execute the given parser on the string and print error
-    err: ParserError
-    str := str
-    state = state_create(&str, exec_data, mem.arena_allocator(&arena), mem.dynamic_arena_allocator(&tree_arena))
-    defer state_destroy(&state)
-    res, err = parser_parse(&state, parser)
-
-    ok = true
-    if err != nil {
-        switch e in err {
-        case SyntaxError:
-            fmt.printfln("syntax error: {}", e.message)
-            state_print_context(&state)
-        case InternalError:
-            fmt.printfln("internal error: {}", e.message)
-        }
-        ok = false
-    } else if !state_eof(&state) {
-        fmt.printfln("syntax error: the parser did not consume all the string.")
-        state_print_context(&state)
-        ok = false
-    }
-    return state, res, ok
-}
-
-// print grammar ///////////////////////////////////////////////////////////////
-
-parser_print :: proc(parser: ^Parser) {
-    // TODO
-    // we need a combinator type in the parser
 }

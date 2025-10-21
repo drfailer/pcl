@@ -7,23 +7,24 @@ import "core:unicode/utf8"
 import "core:log"
 import "core:mem"
 
-Location :: struct {
-    row: int,
-    col: int,
-    file: string,
-}
-
-// TODO: add a max recursion depth in the state
-
 ExecContext :: struct {
     exec: ExecProc,
     state: ParserState,
 }
 
+// old:
 ExecTree :: struct {
     lhs: ^ExecTree,
     rhs: ^ExecTree,
     ctx: ExecContext,
+}
+
+// parser state ////////////////////////////////////////////////////////////////
+
+Location :: struct {
+    row: int,
+    col: int,
+    file: string,
 }
 
 // use for left recursive grammars
@@ -38,8 +39,6 @@ RecursionData :: struct {
 
 // use when branching
 BranchingData :: struct {
-    count: u64,
-    execs: [dynamic]ExecContext,
     depth: u64,
     // TODO: allocator
     // QUESTION: can we cache the states so that we don't have to parse the content multiple times when we see similar paths
