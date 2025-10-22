@@ -10,12 +10,32 @@ import "core:log"
 
 DEBUG :: true
 
-ExecData :: struct {
-    node_allocator: mem.Allocator
+// JSON ////////////////////////////////////////////////////////////////////////
+
+JSON_Number :: union { i32, f32 }
+JSON_String :: string
+JSON_List :: [dynamic]JSON_Value
+
+JSON_Value :: union {
+    JSON_Number,
+    JSON_String,
+    JSON_List,
+    JSON_Object,
 }
 
-skip_spaces :: proc(char: rune) -> bool {
-    return u8(char) == ' ' || u8(char) == '\n'
+JSON_Entry :: struct {
+    id: string,
+    value: JSON_Value,
+}
+
+JSON_Object :: struct {
+    entries: [dynamic]JSON_Entry
+}
+
+// parser execute //////////////////////////////////////////////////////////////
+
+ExecData :: struct {
+    node_allocator: mem.Allocator
 }
 
 print_content :: proc($name: string) -> pcl.ExecProc {
@@ -25,24 +45,28 @@ print_content :: proc($name: string) -> pcl.ExecProc {
     }
 }
 
-exec_value :: proc($type: typeid) -> pcl.ExecProc {
-    return  proc(content: pcl.EC, exec_data: pcl.ED) -> pcl.ER {
+exec_number :: proc($type: typeid) -> pcl.ExecProc {
+    return  proc(c: pcl.EC, d: pcl.ED) -> pcl.ER {
         when DEBUG {
-            fmt.printfln("value: {}", content)
+            fmt.printfln("number: {}", c)
         }
-        // ed := cast(^ExecData)exec_data
-        // node := new(Node, ed.node_allocator)
-        // node^ = cast(Value)(cast(type)strconv.atof(content[0].(string)))
+        // ed := cast(^ExecData)d
+        // value := new(JSON_Value, ed.node_allocator)
+        // when type == i32 {
+        //     node^ = cast(JSON_Value)(cast(i32)strconv.atoi(pcl.ec(c, 0)))
+        // } else {
+        //     node^ = cast(JSON_Value)(cast(f32)strconv.atof(pcl.ec(c, 0)))
+        // }
         // return cast(rawptr)node
-        return content[0].(string)
+        return nil
     }
 }
 
 number_grammar :: proc() -> ^pcl.Parser {
     using pcl
     digits := plus(range('0', '9', skip = nil), skip = nil, name = "digits")
-    ints := combine(digits, name = "ints", exec = exec_value(i32))
-    floats := combine(seq(digits, lit('.'), opt(digits)), skip = nil, name = "floats", exec = exec_value(f32))
+    ints := combine(digits, name = "ints", exec = exec_number(i32))
+    floats := combine(seq(digits, lit('.'), opt(digits)), skip = nil, name = "floats", exec = exec_number(f32))
     return or(floats, ints)
 }
 
@@ -51,7 +75,7 @@ json_grammar :: proc(allocator: pcl.ParserAllocator) -> ^pcl.Parser {
 
     context.allocator = allocator
 
-    pcl.SKIP = skip_spaces
+    pcl.SKIP = proc(char: rune) -> bool { return u8(char) == ' ' || u8(char) == '\n' }
 
     json_object := declare(name = "json_object")
 
