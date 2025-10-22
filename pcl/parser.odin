@@ -27,26 +27,12 @@ parser_error :: proc($error_type: typeid, state: ^ParserState, str: string, args
 
 // parser //////////////////////////////////////////////////////////////////////
 
-ExecResult :: union {
-    string,              // sub-string of the state
-    rawptr,              // user pointer
-    [dynamic]ExecResult, // multiple results
-}
-
-ParseResult :: ^ExecTreeNode
-
-ExecProc :: proc(results: []ExecResult, exec_data: rawptr) -> ExecResult
-
-PredProc :: proc(c: rune) -> bool
-
-ParseProc :: proc(self: ^Parser, state: ^ParserState) -> (res: ParseResult, err: ParserError)
-
 Parser :: struct {
     name: string,
     parse: ParseProc,
     skip: PredProc,
     exec: ExecProc,
-    pred: PredProc,
+    data: ParserData,
     parsers: [dynamic]^Parser,
 }
 
@@ -69,7 +55,7 @@ parser_create :: proc(
     parse: ParseProc,
     skip: PredProc,
     exec: ExecProc,
-    pred: PredProc = nil,
+    data: ParserData = nil,
     parsers: []^Parser = nil,
 ) -> ^Parser {
     parser := new(Parser)
@@ -77,7 +63,7 @@ parser_create :: proc(
     parser.parse = parse
     parser.skip = skip
     parser.exec = exec
-    parser.pred = pred
+    parser.data = data
 
     if parsers != nil && len(parsers) > 0 {
         parser.parsers = make([dynamic]^Parser, len(parsers))

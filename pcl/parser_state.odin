@@ -15,7 +15,7 @@ Location :: struct {
     file: string,
 }
 
-// use for left recursive grammars
+// used for left recursive grammars
 RecursionData :: struct {
     depth: u64,
     top_nodes: map[^Parser]^ExecTreeNode,

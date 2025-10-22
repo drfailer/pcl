@@ -19,14 +19,14 @@ skip_spaces :: proc(char: rune) -> bool {
 }
 
 print_content :: proc($name: string) -> pcl.ExecProc {
-    return proc(content: []pcl.ExecResult, ed: rawptr) -> pcl.ExecResult {
+    return  proc(content: pcl.EC, exec_data: pcl.ED) -> pcl.ER {
         fmt.printfln("{}: {}", name, content)
         return nil
     }
 }
 
 exec_value :: proc($type: typeid) -> pcl.ExecProc {
-    return  proc(content: []pcl.ExecResult, exec_data: rawptr) -> pcl.ExecResult {
+    return  proc(content: pcl.EC, exec_data: pcl.ED) -> pcl.ER {
         when DEBUG {
             fmt.printfln("value: {}", content)
         }

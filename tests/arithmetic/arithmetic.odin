@@ -125,56 +125,56 @@ node_eval :: proc(node: ^Node) -> f32 {
 // exec functions //////////////////////////////////////////////////////////////
 
 exec_value :: proc($type: typeid) -> pcl.ExecProc {
-    return  proc(content: []pcl.ExecResult, exec_data: rawptr) -> pcl.ExecResult {
+    return  proc(c: pcl.EC, d: pcl.ED) -> pcl.ER {
         when DEBUG {
-            fmt.printfln("value: {}", content)
+            fmt.printfln("value: {}", c)
         }
-        ed := cast(^ExecData)exec_data
+        ed := cast(^ExecData)d
         node := new(Node, ed.node_allocator)
-        node^ = cast(Value)(cast(type)strconv.atof(content[0].(string)))
+        node^ = cast(Value)(cast(type)strconv.atof(pcl.ec(c, 0)))
         return cast(rawptr)node
     }
 }
 
 exec_operator :: proc($op: Operator) -> pcl.ExecProc {
-    return proc(content: []pcl.ExecResult, exec_data: rawptr) -> pcl.ExecResult {
+    return proc(c: pcl.EC, d: pcl.ED) -> pcl.ER {
         when DEBUG {
-            fmt.printfln("operator: {}", content)
+            fmt.printfln("operator: {}", c)
         }
-        ed := cast(^ExecData)exec_data
+        ed := cast(^ExecData)d
         node := new(Node, ed.node_allocator)
         node^ = Operation{
             kind = op,
-            lhs = cast(^Node)content[0].(rawptr),
-            rhs = cast(^Node)content[2].(rawptr),
+            lhs = pcl.ec(^Node, c, 0),
+            rhs = pcl.ec(^Node, c, 2),
         }
         return cast(rawptr)node
     }
 }
 
 exec_function :: proc($id: FunctionId) -> pcl.ExecProc {
-    return proc(content: []pcl.ExecResult, exec_data: rawptr) -> pcl.ExecResult {
+    return proc(c: pcl.EC, d: pcl.ED) -> pcl.ER {
         when DEBUG {
-            fmt.printfln("function: {}", content)
+            fmt.printfln("function: {}", c)
         }
-        ed := cast(^ExecData)exec_data
+        ed := cast(^ExecData)d
         node := new(Node, ed.node_allocator)
         node^ = Function{
             id = id,
-            expr = cast(^Node)content[1].(rawptr),
+            expr = pcl.ec(^Node, c, 1)
         }
         return cast(rawptr)node
     }
 }
 
-exec_parent :: proc(content: []pcl.ExecResult, exec_data: rawptr) -> pcl.ExecResult {
+exec_parent :: proc(c: pcl.EC, d: pcl.ED) -> pcl.ER {
     when DEBUG {
-        fmt.printfln("parent: {}", content)
+        fmt.printfln("parent: {}", c)
     }
-    ed := cast(^ExecData)exec_data
+    ed := cast(^ExecData)d
     node := new(Node, ed.node_allocator)
     node^ = Parent{
-        expr = cast(^Node)content[1].(rawptr),
+        expr = pcl.ec(^Node, c, 1),
     }
     return cast(rawptr)node
 }
