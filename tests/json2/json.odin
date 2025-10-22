@@ -1,4 +1,4 @@
-package json
+package json2
 
 import "pcl:pcl"
 import "core:strconv"
@@ -7,8 +7,6 @@ import "core:testing"
 import "core:math"
 import "core:mem"
 import "core:log"
-
-DEBUG :: false
 
 // JSON ////////////////////////////////////////////////////////////////////////
 
@@ -35,93 +33,78 @@ JSON_Object :: struct {
 // parser execute //////////////////////////////////////////////////////////////
 
 ExecData :: struct {
+    list_count: int,
+    value_stack: [dynamic]JSON_Value,
+    object_stack: [dynamic]JSON_Object,
     exec_allocator: mem.Allocator,
+}
+
+add_value :: proc(ed: ^ExecData, value: JSON_Value) {
+    if ed.list_count > 0 {
+        append(&ed.value_stack[len(ed.value_stack) - 1].(JSON_List), value)
+    } else {
+        append(&ed.value_stack, value)
+    }
 }
 
 exec_number :: proc($type: typeid) -> pcl.ExecProc {
     return  proc(c: pcl.EC, d: pcl.ED) -> pcl.ER {
-        when DEBUG {
-            fmt.printfln("number: {}", c)
-        }
         ed := cast(^ExecData)d
-        value := new(JSON_Value, allocator = ed.exec_allocator)
+        value: JSON_Value
         when type == i32 {
-            value^ = cast(JSON_Number)(cast(i32)strconv.atoi(pcl.ec(c, 0)))
+            value = cast(JSON_Number)(cast(i32)strconv.atoi(pcl.ec(c, 0)))
         } else {
-            value^ = cast(JSON_Number)(cast(f32)strconv.atof(pcl.ec(c, 0)))
+            value = cast(JSON_Number)(cast(f32)strconv.atof(pcl.ec(c, 0)))
         }
-        return cast(rawptr)value
+        add_value(ed, value)
+        return nil
     }
 }
 
 exec_string :: proc(c: pcl.EC, d: pcl.ED) -> pcl.ER {
-    when DEBUG {
-        fmt.printfln("string: {}", c)
-    }
     ed := cast(^ExecData)d
-    value := new(JSON_Value, allocator = ed.exec_allocator)
-    value^ = cast(JSON_String)pcl.ec(c, 0)
-    return cast(rawptr)value
-}
-
-exec_comma_separated_list :: proc($T: typeid, $name: string) -> pcl.ExecProc {
-    return proc(c: pcl.EC, d: pcl.ED) -> pcl.ER {
-        when DEBUG {
-            fmt.printfln("{}: {}", name, c)
-        }
-        ed := cast(^ExecData)d
-        entries := new([dynamic]T, allocator = ed.exec_allocator)
-        entries^ = make([dynamic]T, allocator = ed.exec_allocator)
-        if len(c) == 2 {
-            for elt in c[0].([dynamic]pcl.ER) {
-                append(entries, pcl.ec(^T, elt.([dynamic]pcl.ER)[:], 0)^)
-            }
-        }
-        append(entries, pcl.ec(^T, c, len(c) - 1)^)
-        return cast(rawptr)entries
-    }
-}
-
-exec_list :: proc(c: pcl.EC, d: pcl.ED) -> pcl.ER {
-    when DEBUG {
-        fmt.printfln("list: {}", c)
-    }
-    ed := cast(^ExecData)d
-    value := new(JSON_Value, allocator = ed.exec_allocator)
-    list: JSON_List
-    if len(c) == 3 {
-        values := pcl.ec(^JSON_List, c, 1)
-        list = values^
-    }
-    value^ = list
-    return cast(rawptr)value
+    add_value(ed, cast(JSON_String)pcl.ec(c, 0))
+    return nil
 }
 
 exec_entry :: proc(c: pcl.EC, d: pcl.ED) -> pcl.ER {
-    when DEBUG {
-        fmt.printfln("entry: {}", c)
-    }
     ed := cast(^ExecData)d
-    entry := new(JSON_Entry, allocator = ed.exec_allocator)
-    entry.id = pcl.ec(c, 0)
-    value := pcl.ec(^JSON_Value, c, 2)
-    entry.value = value^
-    return cast(rawptr)entry
+    append(&ed.object_stack[len(ed.object_stack) - 1].entries, JSON_Entry{
+        id = pcl.ec(c, 0),
+        value = pop(&ed.value_stack),
+    })
+    return nil
 }
 
-exec_object :: proc(c: pcl.EC, d: pcl.ED) -> pcl.ER {
-    when DEBUG {
-        fmt.printfln("object: {}", c)
-    }
+exec_list_start :: proc(c: pcl.EC, d: pcl.ED) -> pcl.ER {
     ed := cast(^ExecData)d
-    value := new(JSON_Value, allocator = ed.exec_allocator)
-    object: JSON_Object
-    if len(c) > 2 {
-        entries := pcl.ec(^[dynamic]JSON_Entry, c, 1)
-        object.entries = entries^
+    ed.list_count += 1
+    append(&ed.value_stack, make(JSON_List, allocator = ed.exec_allocator))
+    return nil
+}
+
+exec_list_end :: proc(c: pcl.EC, d: pcl.ED) -> pcl.ER {
+    ed := cast(^ExecData)d
+    ed.list_count -= 1
+    if ed.list_count > 0 {
+        list := pop(&ed.value_stack)
+        append(&ed.value_stack[len(ed.value_stack) - 1].(JSON_List), list)
     }
-    value^ = object
-    return cast(rawptr)value
+    return nil
+}
+
+exec_object_start :: proc(c: pcl.EC, d: pcl.ED) -> pcl.ER {
+    ed := cast(^ExecData)d
+    append(&ed.object_stack, JSON_Object{
+        entries = make([dynamic]JSON_Entry, allocator = ed.exec_allocator)
+    })
+    return nil
+}
+
+exec_object_end :: proc(c: pcl.EC, d: pcl.ED) -> pcl.ER {
+    ed := cast(^ExecData)d
+    add_value(ed, pop(&ed.object_stack))
+    return nil
 }
 
 number_grammar :: proc() -> ^pcl.Parser {
@@ -142,16 +125,20 @@ json_grammar :: proc(allocator: pcl.ParserAllocator) -> ^pcl.Parser {
     json_object := declare(name = "json_object")
 
     value   := declare(name = "value")
-    values  := seq(star(seq(value, lit(','))), value, exec = exec_comma_separated_list(JSON_Value, "values"))
+    values  := seq(star(seq(value, lit(','))), value)
     number  := single(number_grammar())
     jstring  := block("\"", "\"", exec = exec_string)
-    list    := seq(lit('['), opt(values), lit(']'), name = "list", exec = exec_list)
+    list_start := lit('[', exec = exec_list_start)
+    list_end := lit(']', exec = exec_list_end)
+    list    := seq(list_start, opt(values), list_end, name = "list")
     define(value, or(list, number, jstring, json_object))
 
     id := block("\"", "\"")
     entry   := seq(id, lit(':'), value, name = "entry", exec = exec_entry)
-    entries := seq(star(seq(entry, lit(','))), entry, exec = exec_comma_separated_list(JSON_Entry, "entries"))
-    define(json_object, seq(lit('{'), opt(entries), lit('}'), name = "object", exec = exec_object))
+    entries := seq(star(seq(entry, lit(','))), entry)
+    object_start := lit('{', exec = exec_object_start)
+    object_end := lit('}', exec = exec_object_end)
+    define(json_object, seq(object_start, opt(entries), object_end, name = "object"))
     return json_object
 }
 
@@ -166,6 +153,8 @@ test_object :: proc(t: ^testing.T) {
     mem.arena_init(&exec_arena, exec_arena_data[:])
     exec_allocator := mem.arena_allocator(&exec_arena)
     exec_data := ExecData{
+        value_stack = make([dynamic]JSON_Value, allocator = exec_allocator),
+        object_stack = make([dynamic]JSON_Object, allocator = exec_allocator),
         exec_allocator = exec_allocator,
     }
 
@@ -179,7 +168,7 @@ test_object :: proc(t: ^testing.T) {
         "empty_list": [],
         "list": [1, 2, 3, 4]
     }`, &exec_data)
-    object := (cast(^JSON_Value)result.(rawptr)).(JSON_Object)
+    object := exec_data.value_stack[0].(JSON_Object)
 
     testing.expect(t, ok == true)
     testing.expect(t, len(object.entries) == 6)
@@ -218,6 +207,8 @@ main :: proc() {
     mem.arena_init(&exec_arena, exec_arena_data[:])
     exec_allocator := mem.arena_allocator(&exec_arena)
     exec_data := ExecData{
+        value_stack = make([dynamic]JSON_Value, allocator = exec_allocator),
+        object_stack = make([dynamic]JSON_Object, allocator = exec_allocator),
         exec_allocator = exec_allocator,
     }
 
@@ -231,6 +222,6 @@ main :: proc() {
         "empty_list": [],
         "list": [1, 2, 3, 4]
     }`, &exec_data)
-    object := cast(^JSON_Value)result.(rawptr)
+    object := exec_data.value_stack[0]
     fmt.println(object)
 }
