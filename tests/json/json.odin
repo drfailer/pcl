@@ -64,23 +64,22 @@ exec_string :: proc(c: pcl.EC, d: pcl.ED) -> pcl.ER {
     return cast(rawptr)value
 }
 
-exec_values :: proc(c: pcl.EC, d: pcl.ED) -> pcl.ER {
-    when DEBUG {
-        fmt.printfln("values: {}", c)
-    }
-    ed := cast(^ExecData)d
-    values := new([dynamic]JSON_Value, allocator = ed.exec_allocator)
-    values^ = make([dynamic]JSON_Value, allocator = ed.exec_allocator)
-    if len(c) == 2 {
-        star_list := c[0].([dynamic]pcl.ER)
-        for elt in star_list {
-            value := pcl.ec(^JSON_Value, elt.([dynamic]pcl.ER)[:], 0)
-            append(values, value^)
+exec_comma_separated_list :: proc($T: typeid, $name: string) -> pcl.ExecProc {
+    return proc(c: pcl.EC, d: pcl.ED) -> pcl.ER {
+        when DEBUG {
+            fmt.printfln("{}: {}", name, c)
         }
+        ed := cast(^ExecData)d
+        entries := new([dynamic]T, allocator = ed.exec_allocator)
+        entries^ = make([dynamic]T, allocator = ed.exec_allocator)
+        if len(c) == 2 {
+            for elt in c[0].([dynamic]pcl.ER) {
+                append(entries, pcl.ec(^T, elt.([dynamic]pcl.ER)[:], 0)^)
+            }
+        }
+        append(entries, pcl.ec(^T, c, len(c) - 1)^)
+        return cast(rawptr)entries
     }
-    value := pcl.ec(^JSON_Value, c, len(c) - 1)
-    append(values, value^)
-    return cast(rawptr)values
 }
 
 exec_list :: proc(c: pcl.EC, d: pcl.ED) -> pcl.ER {
@@ -108,25 +107,6 @@ exec_entry :: proc(c: pcl.EC, d: pcl.ED) -> pcl.ER {
     value := pcl.ec(^JSON_Value, c, 2)
     entry.value = value^
     return cast(rawptr)entry
-}
-
-exec_entries :: proc(c: pcl.EC, d: pcl.ED) -> pcl.ER {
-    when DEBUG {
-        fmt.printfln("entries: {}", c)
-    }
-    ed := cast(^ExecData)d
-    entries := new([dynamic]JSON_Entry, allocator = ed.exec_allocator)
-    entries^ = make([dynamic]JSON_Entry, allocator = ed.exec_allocator)
-    if len(c) == 2 {
-        star_list := c[0].([dynamic]pcl.ER)
-        for elt in star_list {
-            entry := pcl.ec(^JSON_Entry, elt.([dynamic]pcl.ER)[:], 0)
-            append(entries, entry^)
-        }
-    }
-    entry := pcl.ec(^JSON_Entry, c, len(c) - 1)
-    append(entries, entry^)
-    return cast(rawptr)entries
 }
 
 exec_object :: proc(c: pcl.EC, d: pcl.ED) -> pcl.ER {
@@ -162,7 +142,7 @@ json_grammar :: proc(allocator: pcl.ParserAllocator) -> ^pcl.Parser {
     json_object := declare(name = "json_object")
 
     value   := declare(name = "value")
-    values  := seq(star(seq(value, lit(','))), value, exec = exec_values)
+    values  := seq(star(seq(value, lit(','))), value, exec = exec_comma_separated_list(JSON_Value, "values"))
     number  := single(number_grammar())
     jstring  := block("\"", "\"", exec = exec_string)
     list    := seq(lit('['), opt(values), lit(']'), name = "list", exec = exec_list)
@@ -170,9 +150,62 @@ json_grammar :: proc(allocator: pcl.ParserAllocator) -> ^pcl.Parser {
 
     id := block("\"", "\"")
     entry   := seq(id, lit(':'), value, name = "entry", exec = exec_entry)
-    entries := seq(star(seq(entry, lit(','))), entry, exec = exec_entries)
+    entries := seq(star(seq(entry, lit(','))), entry, exec = exec_comma_separated_list(JSON_Entry, "entries"))
     define(json_object, seq(lit('{'), opt(entries), lit('}'), name = "object", exec = exec_object))
     return json_object
+}
+
+@(test)
+test_object :: proc(t: ^testing.T) {
+    parser_allocator := pcl.parser_allocator_create()
+    defer pcl.parser_allocator_destroy(parser_allocator)
+    json_parser := json_grammar(parser_allocator)
+
+    exec_arena_data: [16384]byte
+    exec_arena: mem.Arena
+    mem.arena_init(&exec_arena, exec_arena_data[:])
+    exec_allocator := mem.arena_allocator(&exec_arena)
+    exec_data := ExecData{
+        exec_allocator = exec_allocator,
+    }
+
+    state, result, ok := pcl.parse_string(json_parser, `{
+        "number": 4,
+        "string": "Hellope",
+        "empty_object": {},
+        "object": {
+            "pi": 3.14
+        },
+        "empty_list": [],
+        "list": [1, 2, 3, 4]
+    }`, &exec_data)
+    object := (cast(^JSON_Value)result.(rawptr)).(JSON_Object)
+
+    testing.expect(t, ok == true)
+    testing.expect(t, len(object.entries) == 6)
+
+    testing.expect(t, object.entries[0].id == "number")
+    testing.expect(t, object.entries[0].value.(JSON_Number).(i32) == 4)
+
+    testing.expect(t, object.entries[1].id == "string")
+    testing.expect(t, string(object.entries[1].value.(JSON_String)) == "Hellope")
+
+    testing.expect(t, object.entries[2].id == "empty_object")
+    testing.expect(t, len(object.entries[2].value.(JSON_Object).entries) == 0)
+
+    testing.expect(t, object.entries[3].id == "object")
+    testing.expect(t, len(object.entries[3].value.(JSON_Object).entries) == 1)
+    testing.expect(t, object.entries[3].value.(JSON_Object).entries[0].id == "pi")
+    testing.expect(t, object.entries[3].value.(JSON_Object).entries[0].value.(JSON_Number).(f32) == 3.14)
+
+    testing.expect(t, object.entries[4].id == "empty_list")
+    testing.expect(t, len(object.entries[4].value.(JSON_List)) == 0)
+
+    testing.expect(t, object.entries[5].id == "list")
+    testing.expect(t, len(object.entries[5].value.(JSON_List)) == 4)
+    for v, i in object.entries[5].value.(JSON_List) {
+        testing.expect(t, v.(JSON_Number).(i32) == i32(i + 1))
+    }
 }
 
 main :: proc() {
