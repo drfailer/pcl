@@ -9,21 +9,21 @@ import "core:mem"
 Parser :: struct {
     name: string,
     parse: ParseProc,
-    skip: PredProc, // skip proc
+    skip: SkipProc, // skip proc
     exec: ExecProc,
     data: ParserData,
     parsers: [dynamic]^Parser,
 }
 
 ParserData :: union {
-    PredProc,
+    // PredProc,
 }
-
-PredProc :: proc(c: rune) -> bool // TODO: should it take the state?
 
 // PredProc :: proc(state: ^ParserState, data: PredProcData) -> bool
 
 ParseResult :: ^ExecTreeNode
+
+SkipProc :: proc(c: rune) -> bool // TODO: should it take the state?
 
 ParseProc :: proc(self: ^Parser, state: ^ParserState) -> (res: ParseResult, err: ParserError)
 
@@ -44,7 +44,7 @@ parser_allocator_destroy :: proc(allocator: ParserAllocator) {
 parser_create :: proc(
     name: string,
     parse: ParseProc,
-    skip: PredProc,
+    skip: SkipProc,
     exec: ExecProc,
     data: ParserData = nil,
     parsers: []^Parser = nil,
@@ -141,7 +141,7 @@ parser_parse :: proc(state: ^ParserState, parser: ^Parser) -> (res: ParseResult,
     return parser->parse(state)
 }
 
-parser_skip :: proc(state: ^ParserState, parser_skip: PredProc) {
+parser_skip :: proc(state: ^ParserState, parser_skip: SkipProc) {
     if parser_skip == nil {
         return
     }

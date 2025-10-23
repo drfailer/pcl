@@ -5,7 +5,7 @@ package pcl
 apply_predicate :: proc(
     self: ^Parser,
     state: ^ParserState,
-    pred: PredProc,
+    pred: proc(c: rune) -> bool,
     error: proc(parser: ^Parser, state: ^ParserState) -> ParserError,
 ) -> (res: ParseResult, err: ParserError) {
     parser_skip(state, self.skip)
@@ -27,7 +27,7 @@ apply_predicate :: proc(
 
 one_of :: proc(
     $chars: string,
-    skip: PredProc = SKIP,
+    skip: SkipProc = SKIP,
     exec: ExecProc = nil,
     name: string = "one_of",
 ) -> ^Parser {
@@ -49,7 +49,7 @@ one_of :: proc(
 range :: proc(
     $c1: rune,
     $c2: rune,
-    skip: PredProc = SKIP,
+    skip: SkipProc = SKIP,
     exec: ExecProc = nil,
     name: string = "range",
 ) -> ^Parser {
@@ -70,7 +70,7 @@ range :: proc(
 
 lit_c :: proc(
     $char: rune,
-    skip: PredProc = SKIP,
+    skip: SkipProc = SKIP,
     exec: ExecProc = nil,
     name: string = "lit_c",
 ) -> ^Parser {
@@ -98,7 +98,7 @@ lit_c :: proc(
 
 lit_str :: proc(
     $str: string,
-    skip: PredProc = SKIP,
+    skip: SkipProc = SKIP,
     exec: ExecProc = nil,
     name: string = "lit",
 ) -> ^Parser {
@@ -137,7 +137,7 @@ cursor_on_string :: proc(state: ^ParserState, $prefix: string) -> bool {
 block :: proc(
     $opening: string,
     $closing: string,
-    skip: PredProc = SKIP,
+    skip: SkipProc = SKIP,
     exec: ExecProc = nil,
     name: string = "block",
 ) -> ^Parser {

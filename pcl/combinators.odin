@@ -32,13 +32,13 @@ create_parser_array :: proc(allocator: mem.Allocator, inputs: ..CombinatorInput)
 
 // configuration varibles //////////////////////////////////////////////////////
 
-SKIP: PredProc = nil
+SKIP: SkipProc = nil
 
 // combinators /////////////////////////////////////////////////////////////////
 
 declare :: proc(
     name: string = "parser",
-    skip: PredProc = SKIP,
+    skip: SkipProc = SKIP,
     exec: ExecProc = nil,
 ) -> ^Parser {
     parse := proc(self: ^Parser, state: ^ParserState) -> (res: ParseResult, err: ParserError) {
@@ -78,7 +78,7 @@ empty :: proc() -> ^Parser {
 
 single :: proc(
     parser: ^Parser,
-    skip: PredProc = SKIP,
+    skip: SkipProc = SKIP,
     exec: ExecProc = nil,
     name: string = "single",
 ) -> ^Parser {
@@ -101,7 +101,7 @@ single :: proc(
 
 opt :: proc(
     parser: ^Parser,
-    skip: PredProc = SKIP,
+    skip: SkipProc = SKIP,
     exec: ExecProc = nil,
     name: string = "opt",
 ) -> ^Parser {
@@ -138,7 +138,7 @@ opt :: proc(
  */
 or :: proc(
     parsers: ..^Parser,
-    skip: PredProc = SKIP,
+    skip: SkipProc = SKIP,
     exec: ExecProc = nil,
     name: string = "or",
 ) -> ^Parser {
@@ -165,7 +165,7 @@ or :: proc(
 
 seq :: proc(
     parsers: ..^Parser,
-    skip: PredProc = SKIP,
+    skip: SkipProc = SKIP,
     exec: ExecProc = nil,
     name: string = "seq",
 ) -> ^Parser {
@@ -198,7 +198,7 @@ seq :: proc(
 
 star :: proc(
     parser: ^Parser,
-    skip: PredProc = SKIP,
+    skip: SkipProc = SKIP,
     exec: ExecProc = nil,
     name: string = "star",
 ) -> ^Parser {
@@ -224,7 +224,7 @@ star :: proc(
 
 plus :: proc(
     parser: ^Parser,
-    skip: PredProc = SKIP,
+    skip: SkipProc = SKIP,
     exec: ExecProc = nil,
     name: string = "plus",
 ) -> ^Parser {
@@ -251,7 +251,7 @@ plus :: proc(
 times :: proc(
     $nb_times: int,
     parser: ^Parser,
-    skip: PredProc = SKIP,
+    skip: SkipProc = SKIP,
     exec: ExecProc = nil,
     name: string = "times",
 ) -> ^Parser {
@@ -292,7 +292,7 @@ times :: proc(
  */
 combine :: proc(
     parser: ^Parser,
-    skip: PredProc = SKIP,
+    skip: SkipProc = SKIP,
     exec: ExecProc = nil,
     name: string = "single",
 ) -> ^Parser {
@@ -353,7 +353,7 @@ rec :: proc(parser: ^Parser) -> ^Parser {
  */
 lrec :: proc(
     parsers: ..^Parser,
-    skip: PredProc = SKIP,
+    skip: SkipProc = SKIP,
     exec: ExecProc = nil,
     name: string = "lrec",
 ) -> ^Parser {
