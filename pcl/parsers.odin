@@ -69,12 +69,13 @@ range :: proc(
 }
 
 lit_c :: proc(
-    $char: rune,
+    char: rune,
     skip: SkipProc = SKIP,
     exec: ExecProc = nil,
     name: string = "lit_c",
 ) -> ^Parser {
     parse := proc(self: ^Parser, state: ^ParserState) -> (res: ParseResult, err: ParserError) {
+        char := self.data.(rune)
         parser_skip(state, self.skip)
 
         if state_eof(state) {
@@ -93,20 +94,21 @@ lit_c :: proc(
         return nil, parser_error(SyntaxError, state, "{}: expected '{}', but {} was found.",
                                  self.name, char, state_char(state))
     }
-    return parser_create(name, parse, skip, exec)
+    return parser_create(name, parse, skip, exec, data = char)
 }
 
 lit_str :: proc(
-    $str: string,
+    str: string,
     skip: SkipProc = SKIP,
     exec: ExecProc = nil,
     name: string = "lit",
 ) -> ^Parser {
     parse := proc(self: ^Parser, state: ^ParserState) -> (res: ParseResult, err: ParserError) {
+        str := self.data.(string)
         parser_skip(state, self.skip)
         for c in str {
             if state_eof(state) || state_char(state) != c {
-                return nil, SyntaxError{"expected literal `" + str + "`"}
+                return nil, parser_error(SyntaxError, state, "expected literal `{}`", str)
             }
             if ok := state_eat_one(state); !ok {
                 return nil, InternalError{"state_eat_one failed."}
@@ -116,7 +118,7 @@ lit_str :: proc(
         state_save_pos(state)
         return res, nil
     }
-    return parser_create(name, parse, skip, exec)
+    return parser_create(name, parse, skip, exec, data = str)
 }
 
 lit :: proc { lit_c, lit_str }

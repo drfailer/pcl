@@ -16,10 +16,9 @@ Parser :: struct {
 }
 
 ParserData :: union {
-    // PredProc,
+    string,
+    rune,
 }
-
-// PredProc :: proc(state: ^ParserState, data: PredProcData) -> bool
 
 ParseResult :: ^ExecTreeNode
 
