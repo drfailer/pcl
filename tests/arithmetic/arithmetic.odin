@@ -131,7 +131,15 @@ exec_value :: proc($type: typeid) -> pcl.ExecProc {
         }
         ed := cast(^ExecData)d
         node := new(Node, ed.node_allocator)
-        node^ = cast(Value)(cast(type)strconv.atof(pcl.ec(c, 0)))
+        when type == i32 {
+            value, ok := strconv.parse_int(pcl.ec(c, 0))
+            assert(ok)
+            node^ = cast(Value)cast(i32)value
+        } else {
+            value, ok := strconv.parse_f32(pcl.ec(c, 0))
+            assert(ok)
+            node^ = cast(Value)value
+        }
         return cast(rawptr)node
     }
 }

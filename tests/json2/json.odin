@@ -52,9 +52,13 @@ exec_number :: proc($type: typeid) -> pcl.ExecProc {
         ed := cast(^ExecData)d
         value: JSON_Value
         when type == i32 {
-            value = cast(JSON_Number)(cast(i32)strconv.atoi(pcl.ec(c, 0)))
+            int_value, ok := strconv.parse_int(pcl.ec(c, 0))
+            assert(ok)
+            value = cast(JSON_Number)(cast(i32)int_value)
         } else {
-            value = cast(JSON_Number)(cast(f32)strconv.atof(pcl.ec(c, 0)))
+            f32_value, ok := strconv.parse_f32(pcl.ec(c, 0))
+            assert(ok)
+            value = cast(JSON_Number)f32_value
         }
         add_value(ed, value)
         return nil
