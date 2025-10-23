@@ -50,116 +50,6 @@ empty :: proc() -> ^Parser {
     return parser_create("emtpy", parse, SKIP, nil)
 }
 
-apply_predicate :: proc(
-    self: ^Parser,
-    state: ^ParserState,
-    error: proc(parser: ^Parser, state: ^ParserState) -> ParserError,
-) -> (res: ParseResult, err: ParserError) {
-    pred := self.data.(PredProc)
-    if state_eof(state) {
-        return nil, error(self, state)
-    }
-
-    parser_skip(state, self.skip)
-    if (pred(state_char(state))) {
-        if ok := state_eat_one(state); !ok {
-            return nil, InternalError{"state_eat_one failed."}
-        }
-        res = parser_exec(state, self.exec)
-        state_save_pos(state)
-        return res, nil
-    }
-    return nil, error(self, state)
-}
-
-cond :: proc(
-    pred: PredProc,
-    skip: PredProc = SKIP,
-    exec: ExecProc = nil,
-    name: string = "cond",
-) -> ^Parser {
-    parse := proc(self: ^Parser, state: ^ParserState) -> (res: ParseResult, err: ParserError) {
-        return apply_predicate(self, state, proc(parser: ^Parser, state: ^ParserState) -> ParserError {
-            return parser_error(SyntaxError, state, "{}: failed to apply predicate.", parser.name)
-        })
-    }
-    return parser_create(name, parse, skip, exec, data = pred)
-}
-
-one_of :: proc(
-    $chars: string,
-    skip: PredProc = SKIP,
-    exec: ExecProc = nil,
-    name: string = "one_of",
-) -> ^Parser {
-    parse := proc(self: ^Parser, state: ^ParserState) -> (res: ParseResult, err: ParserError) {
-        return apply_predicate(self, state, proc(parser: ^Parser, state: ^ParserState) -> ParserError {
-            return parser_error(SyntaxError, state, "{}: expected one of [{}]", parser.name, chars)
-        })
-    }
-    return parser_create(name, parse, skip, exec, data = proc(c: rune) -> bool {
-        return strings.contains_rune(chars, rune(c))
-    })
-}
-
-range :: proc(
-    $c1: rune,
-    $c2: rune,
-    skip: PredProc = SKIP,
-    exec: ExecProc = nil,
-    name: string = "range",
-) -> ^Parser {
-    parse := proc(self: ^Parser, state: ^ParserState) -> (res: ParseResult, err: ParserError) {
-        return apply_predicate(self, state, proc(parser: ^Parser, state: ^ParserState) -> ParserError {
-            return parser_error(SyntaxError, state, "{}: expected range({}, {})", parser.name, c1, c2)
-        })
-    }
-    return parser_create(name, parse, skip, exec, data = proc(c: rune) -> bool {
-        return c1 <= c && c <= c2
-    })
-}
-
-lit_c :: proc(
-    $char: rune,
-    skip: PredProc = SKIP,
-    exec: ExecProc = nil,
-    name: string = "lit_c",
-) -> ^Parser {
-    parse := proc(self: ^Parser, state: ^ParserState) -> (res: ParseResult, err: ParserError) {
-        return apply_predicate(self, state, proc(parser: ^Parser, state: ^ParserState) -> ParserError {
-            return parser_error(SyntaxError, state, "{}: expected '{}'", parser.name, char)
-        })
-    }
-    return parser_create(name, parse, skip, exec, data = proc(c: rune) -> bool {
-        return c == char
-    })
-}
-
-lit_str :: proc(
-    $str: string,
-    skip: PredProc = SKIP,
-    exec: ExecProc = nil,
-    name: string = "lit",
-) -> ^Parser {
-    parse := proc(self: ^Parser, state: ^ParserState) -> (res: ParseResult, err: ParserError) {
-        parser_skip(state, self.skip)
-        for c in str {
-            if state_eof(state) || state_char(state) != c {
-                return nil, SyntaxError{"expected literal `" + str + "`"}
-            }
-            if ok := state_eat_one(state); !ok {
-                return nil, InternalError{"state_eat_one failed."}
-            }
-        }
-        res = parser_exec(state, self.exec)
-        state_save_pos(state)
-        return res, nil
-    }
-    return parser_create(name, parse, skip, exec)
-}
-
-lit :: proc { lit_c, lit_str }
-
 single :: proc(
     parser: ^Parser,
     skip: PredProc = SKIP,
@@ -183,36 +73,101 @@ single :: proc(
     return parser_create(name, parse, skip, exec, parsers = []^Parser{parser})
 }
 
-/*
- * This parser is used when we need to combine parsers but run the execution
- * function on the whole parsed string.
- *
- * Example:
- *
- * normal_rule := seq(rang('0', '9'), exec = foo)
- * parse("12345") => foo(["1", "2", "3", "4", "5"])
- *
- * combined_rule := combine(seq(rang('0', '9')), exec = foo)
- * parse("12345") => foo(["12345"])
- */
-combine :: proc(
+opt :: proc(
     parser: ^Parser,
     skip: PredProc = SKIP,
     exec: ExecProc = nil,
-    name: string = "single",
+    name: string = "opt",
 ) -> ^Parser {
     parse := proc(self: ^Parser, state: ^ParserState) -> (res: ParseResult, err: ParserError) {
         parser_skip(state, self.skip)
-        pos := state.pos
-        if res, err = parser_parse(state, self.parsers[0]); err != nil {
-            return nil, err
+        sub_state := state^
+        if res, err = parser_parse(&sub_state, self.parsers[0]); err != nil {
+            // ISSUE: this allow to transmit error message when the optional
+            //        parser failed but did consume a part of the string (in
+            //        this case, the content was there, but contained an error).
+            //        However, this will not work if the `skip` of the sub-rule
+            //        is different than the skip of this rule.
+            if (self.parsers[0].skip == nil || self.parsers[0].skip == self.skip) && sub_state.cur > state.cur {
+                state_set(state, &sub_state)
+                return nil, err
+            }
+            return nil, nil
         }
-        state.pos = pos
-        res = parser_exec(state, self.exec)
+        free_all(state.global_state.error_allocator)
+        state_set(state, &sub_state)
+        if self.exec != nil {
+            res = parser_exec(state, self.exec, res)
+        }
         state_save_pos(state)
         return res, nil
     }
     return parser_create(name, parse, skip, exec, parsers = []^Parser{parser})
+}
+
+/*
+ * The or process rules in order, which means that the first rule in the list
+ * will be tested before the second. This parser is greedy and will return the
+ * first rule that can be applied on the input.
+ */
+or :: proc(
+    parsers: ..^Parser,
+    skip: PredProc = SKIP,
+    exec: ExecProc = nil,
+    name: string = "or",
+) -> ^Parser {
+    parse := proc(self: ^Parser, state: ^ParserState) -> (res: ParseResult, err: ParserError) {
+        parser_skip(state, self.skip)
+
+        for parser in self.parsers {
+            sub_state := state^
+            sub_res: ParseResult
+            sub_err: ParserError
+
+            if sub_res, sub_err = parser_parse(&sub_state, parser); sub_err == nil {
+                state_set(state, &sub_state)
+                res = parser_exec(state, self.exec, sub_res)
+                state_save_pos(state)
+                return res, nil
+            }
+            free_all(state.global_state.error_allocator)
+        }
+        return nil, parser_error(SyntaxError, state, "none of the rules in `{}` could be applied.", self.name)
+    }
+    return parser_create(name, parse, skip, exec, parsers = parsers)
+}
+
+seq :: proc(
+    parsers: ..^Parser,
+    skip: PredProc = SKIP,
+    exec: ExecProc = nil,
+    name: string = "seq",
+) -> ^Parser {
+    parse := proc(self: ^Parser, state: ^ParserState) -> (res: ParseResult, err: ParserError) {
+        results := make([dynamic]ParseResult, allocator = state.global_state.tree_allocator)
+        sub_state := state^
+        sub_res: ParseResult
+
+        for parser, parser_idx in self.parsers {
+            parser_skip(&sub_state, self.skip)
+            if sub_res, err = parser_parse(&sub_state, parser); err != nil {
+                state_set(state, &sub_state)
+                switch e in err {
+                case InternalError:
+                    return nil, err
+                case SyntaxError:
+                    return nil, parser_error(SyntaxError, state, "{}[{}]: {}",
+                                             self.name, parser_idx, e.message)
+                }
+            }
+            append(&results, sub_res)
+            state_set(state, &sub_state)
+        }
+        res = parser_exec(state, self.exec, results)
+        state_save_pos(state)
+        return res, nil
+    }
+    return parser_create(name, parse, skip, exec, parsers = parsers)
 }
 
 star :: proc(
@@ -297,104 +252,55 @@ times :: proc(
     return parser_create(name, parse, skip, exec, parsers = []^Parser{parser})
 }
 
-seq :: proc(
-    parsers: ..^Parser,
-    skip: PredProc = SKIP,
-    exec: ExecProc = nil,
-    name: string = "seq",
-) -> ^Parser {
-    parse := proc(self: ^Parser, state: ^ParserState) -> (res: ParseResult, err: ParserError) {
-        results := make([dynamic]ParseResult, allocator = state.global_state.tree_allocator)
-        sub_state := state^
-        sub_res: ParseResult
-
-        for parser, parser_idx in self.parsers {
-            parser_skip(&sub_state, self.skip)
-            if sub_res, err = parser_parse(&sub_state, parser); err != nil {
-                state_set(state, &sub_state)
-                switch e in err {
-                case InternalError:
-                    return nil, err
-                case SyntaxError:
-                    return nil, parser_error(SyntaxError, state, "{}[{}]: {}",
-                                             self.name, parser_idx, e.message)
-                }
-            }
-            append(&results, sub_res)
-            state_set(state, &sub_state)
-        }
-        res = parser_exec(state, self.exec, results)
-        state_save_pos(state)
-        return res, nil
-    }
-    return parser_create(name, parse, skip, exec, parsers = parsers)
-}
-
 /*
- * The or process rules in order, which means that the first rule in the list
- * will be tested before the second. This parser is greedy and will return the
- * first rule that can be applied on the input.
+ * This parser is used when we need to combine parsers but run the execution
+ * function on the whole parsed string.
  *
- * TODO: the execution functions of the sub rules should only be executed on
- *       success, we need a system similar to lrec
+ * Example:
+ *
+ * normal_rule := seq(rang('0', '9'), exec = foo)
+ * parse("12345") => foo(["1", "2", "3", "4", "5"])
+ *
+ * combined_rule := combine(seq(rang('0', '9')), exec = foo)
+ * parse("12345") => foo(["12345"])
  */
-or :: proc(
-    parsers: ..^Parser,
-    skip: PredProc = SKIP,
-    exec: ExecProc = nil,
-    name: string = "or",
-) -> ^Parser {
-    parse := proc(self: ^Parser, state: ^ParserState) -> (res: ParseResult, err: ParserError) {
-        parser_skip(state, self.skip)
-
-        for parser in self.parsers {
-            sub_state := state^
-            sub_res: ParseResult
-            sub_err: ParserError
-
-            if sub_res, sub_err = parser_parse(&sub_state, parser); sub_err == nil {
-                state_set(state, &sub_state)
-                res = parser_exec(state, self.exec, sub_res)
-                state_save_pos(state)
-                return res, nil
-            }
-            free_all(state.global_state.error_allocator)
-        }
-        return nil, parser_error(SyntaxError, state, "none of the rules in `{}` could be applied.", self.name)
-    }
-    return parser_create(name, parse, skip, exec, parsers = parsers)
-}
-
-opt :: proc(
+combine :: proc(
     parser: ^Parser,
     skip: PredProc = SKIP,
     exec: ExecProc = nil,
-    name: string = "opt",
+    name: string = "single",
 ) -> ^Parser {
     parse := proc(self: ^Parser, state: ^ParserState) -> (res: ParseResult, err: ParserError) {
         parser_skip(state, self.skip)
-        sub_state := state^
-        if res, err = parser_parse(&sub_state, self.parsers[0]); err != nil {
-            // ISSUE: this allow to transmit error message when the optional
-            //        parser failed but did consume a part of the string (in
-            //        this case, the content was there, but contained an error).
-            //        However, this will not work if the `skip` of the sub-rule
-            //        is different than the skip of this rule.
-            if (self.parsers[0].skip == nil || self.parsers[0].skip == self.skip) && sub_state.cur > state.cur {
-                state_set(state, &sub_state)
-                return nil, err
-            }
-            return nil, nil
+        pos := state.pos
+        if res, err = parser_parse(state, self.parsers[0]); err != nil {
+            return nil, err
         }
-        free_all(state.global_state.error_allocator)
-        state_set(state, &sub_state)
-        if self.exec != nil {
-            res = parser_exec(state, self.exec, res)
-        }
+        state.pos = pos
+        res = parser_exec(state, self.exec)
         state_save_pos(state)
         return res, nil
     }
     return parser_create(name, parse, skip, exec, parsers = []^Parser{parser})
+}
+
+rec :: proc(parser: ^Parser) -> ^Parser {
+    parse := proc(self: ^Parser, state: ^ParserState) -> (res: ParseResult, err: ParserError) {
+        recursive_rule := self.parsers[0]
+
+        old_top_nodes := state.global_state.rd.top_nodes
+        state.global_state.rd.top_nodes = make(map[^Parser]^ExecTreeNode)
+        defer {
+            delete(state.global_state.rd.top_nodes)
+            state.global_state.rd.top_nodes = old_top_nodes
+        }
+
+        if res, err = parser_parse(state, self.parsers[0]); err != nil {
+            return nil, err
+        }
+        return res, nil
+    }
+    return parser_create("", parse, nil, nil, parsers = []^Parser{parser})
 }
 
 /*
@@ -486,71 +392,4 @@ lrec :: proc(
         return res, nil
     }
     return parser_create(name, parse, skip, exec, parsers = parsers)
-}
-
-rec :: proc(parser: ^Parser) -> ^Parser {
-    parse := proc(self: ^Parser, state: ^ParserState) -> (res: ParseResult, err: ParserError) {
-        recursive_rule := self.parsers[0]
-
-        old_top_nodes := state.global_state.rd.top_nodes
-        state.global_state.rd.top_nodes = make(map[^Parser]^ExecTreeNode)
-        defer {
-            delete(state.global_state.rd.top_nodes)
-            state.global_state.rd.top_nodes = old_top_nodes
-        }
-
-        if res, err = parser_parse(state, self.parsers[0]); err != nil {
-            return nil, err
-        }
-        return res, nil
-    }
-    return parser_create("", parse, nil, nil, parsers = []^Parser{parser})
-}
-
-block :: proc(
-    $opening: string,
-    $closing: string,
-    skip: PredProc = SKIP,
-    exec: ExecProc = nil,
-    name: string = "block",
-) -> ^Parser {
-    parse := proc(self: ^Parser, state: ^ParserState) -> (res: ParseResult, err: ParserError) {
-        parser_skip(state, self.skip)
-        if !state_cursor_on_string(state, opening) {
-            return nil, parser_error(SyntaxError, state, "opening string not found in `{}({}, {})`.",
-                                     self.name, opening, closing)
-        }
-        state.cur += len(opening)
-        state.loc.col += len(opening) // opening should not contain \n
-        count := 1
-        begin_cur := state.cur
-        end_cur := state.cur
-
-        for count > 0 {
-            if state_eof(state) {
-                return nil, parser_error(SyntaxError, state, "closing string not found in `{}({}, {})`.",
-                                         self.name, opening, closing)
-            }
-            if state_cursor_on_string(state, closing) {
-                count -= 1
-                end_cur = state.cur
-                state.cur += len(closing)
-                state.loc.col += len(closing) // closing should not contain \n
-            } else if state_cursor_on_string(state, opening) {
-                count += 1
-                state.cur += len(opening)
-                state.loc.col += len(opening) // opening should not contain \n
-            } else {
-                state_eat_one(state)
-            }
-        }
-        cur := state.cur
-        state.pos = begin_cur
-        state.cur = end_cur
-        res = parser_exec(state, self.exec)
-        state.cur = cur
-        state_save_pos(state)
-        return res, nil
-    }
-    return parser_create(name, parse, skip, exec)
 }

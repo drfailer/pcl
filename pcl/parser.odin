@@ -4,27 +4,6 @@ import "core:strings"
 import "core:fmt"
 import "core:mem"
 
-// errors //////////////////////////////////////////////////////////////////////
-
-SyntaxError :: struct {
-    message: string,
-}
-
-InternalError :: struct {
-    message: string,
-}
-
-ParserError :: union {
-    SyntaxError,
-    InternalError,
-}
-
-parser_error :: proc($error_type: typeid, state: ^ParserState, str: string, args: ..any) -> ParserError {
-    return error_type{
-        fmt.aprintf(str, ..args, allocator = state.global_state.error_allocator)
-    }
-}
-
 // parser //////////////////////////////////////////////////////////////////////
 
 Parser :: struct {
@@ -35,6 +14,16 @@ Parser :: struct {
     data: ParserData,
     parsers: [dynamic]^Parser,
 }
+
+ParserData :: union {
+    PredProc,
+}
+
+PredProc :: proc(c: rune) -> bool // TODO: should it take the state?
+
+ParseResult :: ^ExecTreeNode
+
+ParseProc :: proc(self: ^Parser, state: ^ParserState) -> (res: ParseResult, err: ParserError)
 
 ParserAllocator :: mem.Allocator
 
@@ -161,6 +150,27 @@ parser_skip :: proc(state: ^ParserState, parser_skip: PredProc) {
             state.loc.col = 1
         }
         state_advance(state)
+    }
+}
+
+// errors //////////////////////////////////////////////////////////////////////
+
+SyntaxError :: struct {
+    message: string,
+}
+
+InternalError :: struct {
+    message: string,
+}
+
+ParserError :: union {
+    SyntaxError,
+    InternalError,
+}
+
+parser_error :: proc($error_type: typeid, state: ^ParserState, str: string, args: ..any) -> ParserError {
+    return error_type{
+        fmt.aprintf(str, ..args, allocator = state.global_state.error_allocator)
     }
 }
 

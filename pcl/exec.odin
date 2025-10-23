@@ -8,6 +8,16 @@ import "core:mem"
  * user callback functions during the parsing.
  */
 
+ExecData :: rawptr
+
+ExecProc :: proc(c: []ExecResult, d: ExecData) -> ExecResult
+
+ExecResult :: union {
+    string,              // sub-string of the state
+    rawptr,              // user pointer
+    [dynamic]ExecResult, // multiple results
+}
+
 ExecContext :: struct {
     exec: ExecProc,
     state: ParserState,
@@ -62,4 +72,23 @@ exec_tree_node_destroy :: proc(node: ^ExecTreeNode) {
     // }
     // delete(node.childs)
     // free(node)
+}
+
+// helper function and aliases /////////////////////////////////////////////////////////////
+
+ER :: ExecResult
+EC :: []ExecResult
+ED :: ExecData
+
+ec_type :: proc($T: typeid, c: EC, idx: int) -> T {
+    return cast(T)c[idx].(rawptr)
+}
+
+ec_string :: proc(c: EC, idx: int) -> string {
+    return c[idx].(string)
+}
+
+ec :: proc {
+    ec_type,
+    ec_string,
 }
