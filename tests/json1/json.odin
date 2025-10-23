@@ -143,19 +143,19 @@ json_grammar :: proc(allocator: pcl.ParserAllocator) -> ^pcl.Parser {
 
     pcl.SKIP = proc(char: rune) -> bool { return u8(char) == ' ' || u8(char) == '\n' }
 
-    json_object := declare(name = "json_object")
+    json_object := declare(name = "object", exec = exec_object)
 
     value   := declare(name = "value")
-    values  := seq(star(seq(value, lit(','))), value, exec = exec_comma_separated_list(JSON_Value, "values"))
+    values  := seq(star(seq(value, ',')), value, exec = exec_comma_separated_list(JSON_Value, "values"))
     number  := single(number_grammar())
-    jstring  := block("\"", "\"", exec = exec_string)
-    list    := seq(lit('['), opt(values), lit(']'), name = "list", exec = exec_list)
+    jstring := block("\"", "\"", exec = exec_string)
+    list    := seq('[', opt(values), ']', name = "list", exec = exec_list)
     define(value, or(list, number, jstring, json_object))
 
-    id := block("\"", "\"")
-    entry   := seq(id, lit(':'), value, name = "entry", exec = exec_entry)
-    entries := seq(star(seq(entry, lit(','))), entry, exec = exec_comma_separated_list(JSON_Entry, "entries"))
-    define(json_object, seq(lit('{'), opt(entries), lit('}'), name = "object", exec = exec_object))
+    id      := block("\"", "\"")
+    entry   := seq(id, ':', value, name = "entry", exec = exec_entry)
+    entries := seq(star(seq(entry, ',')), entry, exec = exec_comma_separated_list(JSON_Entry, "entries"))
+    define(json_object, seq('{', opt(entries), '}'))
     return json_object
 }
 

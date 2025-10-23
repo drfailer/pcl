@@ -14,7 +14,7 @@ CombinatorInput :: union {
 }
 
 @(private="file")
-create_parser_array :: proc(allocator: mem.Allocator, inputs: ..CombinatorInput) -> [dynamic]^Parser {
+create_parser_array :: proc(allocator: mem.Allocator, skip: SkipProc, inputs: ..CombinatorInput) -> [dynamic]^Parser {
     array := make([dynamic]^Parser, allocator = allocator)
 
     for input in inputs {
@@ -22,9 +22,9 @@ create_parser_array :: proc(allocator: mem.Allocator, inputs: ..CombinatorInput)
         case ^Parser:
             append(&array, value)
         case rune:
-            // TODO
+            append(&array, lit_c(value, skip = skip))
         case string:
-            // TODO
+            append(&array, lit_str(value, skip = skip))
         }
     }
     return array
@@ -164,7 +164,7 @@ or :: proc(
 }
 
 seq :: proc(
-    parsers: ..^Parser,
+    inputs: ..CombinatorInput,
     skip: SkipProc = SKIP,
     exec: ExecProc = nil,
     name: string = "seq",
@@ -193,7 +193,9 @@ seq :: proc(
         state_save_pos(state)
         return res, nil
     }
-    return parser_create(name, parse, skip, exec, parsers = parsers)
+    return parser_create_from_dynamic_array(
+        name, parse, skip, exec, nil,
+        parsers = create_parser_array(context.allocator, skip, ..inputs))
 }
 
 star :: proc(

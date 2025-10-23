@@ -128,20 +128,20 @@ json_grammar :: proc(allocator: pcl.ParserAllocator) -> ^pcl.Parser {
 
     json_object := declare(name = "json_object")
 
-    value   := declare(name = "value")
-    values  := seq(star(seq(value, lit(','))), value)
-    number  := single(number_grammar())
-    jstring  := block("\"", "\"", exec = exec_string)
+    value      := declare(name = "value")
+    values     := seq(star(seq(value, ',')), value)
+    number     := single(number_grammar())
+    jstring    := block("\"", "\"", exec = exec_string)
     list_start := lit('[', exec = exec_list_start)
-    list_end := lit(']', exec = exec_list_end)
-    list    := seq(list_start, opt(values), list_end, name = "list")
+    list_end   := lit(']', exec = exec_list_end)
+    list       := seq(list_start, opt(values), list_end, name = "list")
     define(value, or(list, number, jstring, json_object))
 
-    id := block("\"", "\"")
-    entry   := seq(id, lit(':'), value, name = "entry", exec = exec_entry)
-    entries := seq(star(seq(entry, lit(','))), entry)
+    id           := block("\"", "\"")
+    entry        := seq(id, ':', value, name = "entry", exec = exec_entry)
+    entries      := seq(star(seq(entry, ',')), entry)
     object_start := lit('{', exec = exec_object_start)
-    object_end := lit('}', exec = exec_object_end)
+    object_end   := lit('}', exec = exec_object_end)
     define(json_object, seq(object_start, opt(entries), object_end, name = "object"))
     return json_object
 }

@@ -40,13 +40,13 @@ parser_allocator_destroy :: proc(allocator: ParserAllocator) {
     free(arena)
 }
 
-parser_create :: proc(
+parser_create_from_dynamic_array :: proc(
     name: string,
     parse: ParseProc,
     skip: SkipProc,
     exec: ExecProc,
-    data: ParserData = nil,
-    parsers: []^Parser = nil,
+    data: ParserData,
+    parsers: [dynamic]^Parser,
 ) -> ^Parser {
     parser := new(Parser)
     parser.name = name
@@ -54,16 +54,33 @@ parser_create :: proc(
     parser.skip = skip
     parser.exec = exec
     parser.data = data
+    parser.parsers = parsers
+    return parser
+}
 
+parser_create_from_slice :: proc(
+    name: string,
+    parse: ParseProc,
+    skip: SkipProc,
+    exec: ExecProc,
+    data: ParserData = nil,
+    parsers: []^Parser = nil,
+) -> ^Parser {
+    parser_array: [dynamic]^Parser
     if parsers != nil && len(parsers) > 0 {
-        parser.parsers = make([dynamic]^Parser, len(parsers))
+        parser_array = make([dynamic]^Parser, len(parsers))
 
         for sub_parser, idx in parsers {
             if sub_parser == nil do continue
-            parser.parsers[idx] = sub_parser
+            parser_array[idx] = sub_parser
         }
     }
-    return parser
+    return parser_create_from_dynamic_array(name, parse, skip, exec, data, parser_array)
+}
+
+parser_create :: proc {
+    parser_create_from_dynamic_array,
+    parser_create_from_slice,
 }
 
 // parse api ///////////////////////////////////////////////////////////////////
