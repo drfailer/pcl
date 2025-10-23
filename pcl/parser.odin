@@ -9,7 +9,7 @@ import "core:mem"
 Parser :: struct {
     name: string,
     parse: ParseProc,
-    skip: PredProc,
+    skip: PredProc, // skip proc
     exec: ExecProc,
     data: ParserData,
     parsers: [dynamic]^Parser,
@@ -20,6 +20,8 @@ ParserData :: union {
 }
 
 PredProc :: proc(c: rune) -> bool // TODO: should it take the state?
+
+// PredProc :: proc(state: ^ParserState, data: PredProcData) -> bool
 
 ParseResult :: ^ExecTreeNode
 

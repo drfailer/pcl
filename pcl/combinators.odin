@@ -3,6 +3,32 @@ package pcl
 import "core:fmt"
 import "core:strings"
 import "core:slice"
+import "core:mem"
+
+// combinator intput type //////////////////////////////////////////////////////
+
+CombinatorInput :: union {
+    ^Parser,
+    string,
+    rune,
+}
+
+@(private="file")
+create_parser_array :: proc(allocator: mem.Allocator, inputs: ..CombinatorInput) -> [dynamic]^Parser {
+    array := make([dynamic]^Parser, allocator = allocator)
+
+    for input in inputs {
+        switch value in input {
+        case ^Parser:
+            append(&array, value)
+        case rune:
+            // TODO
+        case string:
+            // TODO
+        }
+    }
+    return array
+}
 
 // configuration varibles //////////////////////////////////////////////////////
 

@@ -5,15 +5,16 @@ package pcl
 apply_predicate :: proc(
     self: ^Parser,
     state: ^ParserState,
+    pred: PredProc,
     error: proc(parser: ^Parser, state: ^ParserState) -> ParserError,
 ) -> (res: ParseResult, err: ParserError) {
-    pred := self.data.(PredProc)
+    parser_skip(state, self.skip)
+
     if state_eof(state) {
         return nil, error(self, state)
     }
 
-    parser_skip(state, self.skip)
-    if (pred(state_char(state))) {
+    if pred(state_char(state)) {
         if ok := state_eat_one(state); !ok {
             return nil, InternalError{"state_eat_one failed."}
         }
@@ -31,13 +32,18 @@ one_of :: proc(
     name: string = "one_of",
 ) -> ^Parser {
     parse := proc(self: ^Parser, state: ^ParserState) -> (res: ParseResult, err: ParserError) {
-        return apply_predicate(self, state, proc(parser: ^Parser, state: ^ParserState) -> ParserError {
-            return parser_error(SyntaxError, state, "{}: expected one of [{}]", parser.name, chars)
-        })
+        return apply_predicate(
+            self,
+            state,
+            proc(c: rune) -> bool {
+                return strings.contains_rune(chars, rune(c))
+            },
+            proc(parser: ^Parser, state: ^ParserState) -> ParserError {
+                return parser_error(SyntaxError, state, "{}: expected one of [{}]", parser.name, chars)
+            },
+        )
     }
-    return parser_create(name, parse, skip, exec, data = proc(c: rune) -> bool {
-        return strings.contains_rune(chars, rune(c))
-    })
+    return parser_create(name, parse, skip, exec)
 }
 
 range :: proc(
@@ -48,13 +54,18 @@ range :: proc(
     name: string = "range",
 ) -> ^Parser {
     parse := proc(self: ^Parser, state: ^ParserState) -> (res: ParseResult, err: ParserError) {
-        return apply_predicate(self, state, proc(parser: ^Parser, state: ^ParserState) -> ParserError {
-            return parser_error(SyntaxError, state, "{}: expected range({}, {})", parser.name, c1, c2)
-        })
+        return apply_predicate(
+            self,
+            state,
+            proc(c: rune) -> bool {
+                return c1 <= c && c <= c2
+            },
+            proc(parser: ^Parser, state: ^ParserState) -> ParserError {
+                return parser_error(SyntaxError, state, "{}: expected range({}, {})", parser.name, c1, c2)
+            },
+        )
     }
-    return parser_create(name, parse, skip, exec, data = proc(c: rune) -> bool {
-        return c1 <= c && c <= c2
-    })
+    return parser_create(name, parse, skip, exec)
 }
 
 lit_c :: proc(
@@ -64,13 +75,25 @@ lit_c :: proc(
     name: string = "lit_c",
 ) -> ^Parser {
     parse := proc(self: ^Parser, state: ^ParserState) -> (res: ParseResult, err: ParserError) {
-        return apply_predicate(self, state, proc(parser: ^Parser, state: ^ParserState) -> ParserError {
-            return parser_error(SyntaxError, state, "{}: expected '{}'", parser.name, char)
-        })
+        parser_skip(state, self.skip)
+
+        if state_eof(state) {
+            return nil, parser_error(SyntaxError, state, "{}: expected '{}', but eof was found.",
+                                     self.name, char)
+        }
+
+        if (state_char(state) == char) {
+            if ok := state_eat_one(state); !ok {
+                return nil, InternalError{"state_eat_one failed."}
+            }
+            res = parser_exec(state, self.exec)
+            state_save_pos(state)
+            return res, nil
+        }
+        return nil, parser_error(SyntaxError, state, "{}: expected '{}', but {} was found.",
+                                 self.name, char, state_char(state))
     }
-    return parser_create(name, parse, skip, exec, data = proc(c: rune) -> bool {
-        return c == char
-    })
+    return parser_create(name, parse, skip, exec)
 }
 
 lit_str :: proc(
