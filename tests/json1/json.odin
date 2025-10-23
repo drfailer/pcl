@@ -146,7 +146,7 @@ json_grammar :: proc(allocator: pcl.ParserAllocator) -> ^pcl.Parser {
     json_object := declare(name = "object", exec = exec_object)
 
     value   := declare(name = "value")
-    values  := seq(star(seq(value, ',')), value, exec = exec_comma_separated_list(JSON_Value, "values"))
+    values  := seq(star(value, ','), value, exec = exec_comma_separated_list(JSON_Value, "values"))
     number  := single(number_grammar())
     jstring := block("\"", "\"", exec = exec_string)
     list    := seq('[', opt(values), ']', name = "list", exec = exec_list)
@@ -154,7 +154,7 @@ json_grammar :: proc(allocator: pcl.ParserAllocator) -> ^pcl.Parser {
 
     id      := block("\"", "\"")
     entry   := seq(id, ':', value, name = "entry", exec = exec_entry)
-    entries := seq(star(seq(entry, ',')), entry, exec = exec_comma_separated_list(JSON_Entry, "entries"))
+    entries := seq(star(entry, ','), entry, exec = exec_comma_separated_list(JSON_Entry, "entries"))
     define(json_object, seq('{', opt(entries), '}'))
     return json_object
 }

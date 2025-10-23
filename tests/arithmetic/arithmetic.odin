@@ -212,22 +212,22 @@ arithmetic_grammar :: proc(allocator: pcl.ParserAllocator) -> ^pcl.Parser {
     digits := plus(range('0', '9'), name = "digits")
 
     ints := combine(digits, name = "ints", exec = exec_value(i32))
-    floats := combine(seq(digits, lit('.'), opt(digits)), name = "floats", exec = exec_value(f32))
+    floats := combine(digits, '.', opt(digits), name = "floats", exec = exec_value(f32))
 
-    parent := seq(lit('('), rec(expr), lit(')'), name = "parent", exec = exec_parent)
-    sin := seq(lit("sin"), parent, exec = exec_function(.Sin))
-    cos := seq(lit("cos"), parent, exec = exec_function(.Cos))
-    tan := seq(lit("tan"), parent, exec = exec_function(.Tan))
+    parent := seq('(', rec(expr), ')', name = "parent", exec = exec_parent)
+    sin := seq("sin", parent, exec = exec_function(.Sin))
+    cos := seq("cos", parent, exec = exec_function(.Cos))
+    tan := seq("tan", parent, exec = exec_function(.Tan))
     functions := or(cos, sin, tan)
     factor := or(floats, ints, parent, functions, name = "factor")
 
     term := declare(name = "term")
-    mul := lrec(term, lit('*'), factor, exec = exec_operator(.Mul))
-    div := lrec(term, lit('/'), factor, exec = exec_operator(.Div))
+    mul := lrec(term, '*', factor, exec = exec_operator(.Mul))
+    div := lrec(term, '/', factor, exec = exec_operator(.Div))
     define(term, or(mul, div, factor))
 
-    add := lrec(expr, lit('+'), term, exec = exec_operator(.Add))
-    sub := lrec(expr, lit('-'), term, exec = exec_operator(.Sub))
+    add := lrec(expr, '+', term, exec = exec_operator(.Add))
+    sub := lrec(expr, '-', term, exec = exec_operator(.Sub))
     define(expr, or(add, sub, term))
     return expr
 }

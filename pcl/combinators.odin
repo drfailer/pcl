@@ -77,7 +77,7 @@ empty :: proc() -> ^Parser {
 }
 
 single :: proc(
-    parser: ^Parser,
+    input: CombinatorInput,
     skip: SkipProc = SKIP,
     exec: ExecProc = nil,
     name: string = "single",
@@ -96,11 +96,12 @@ single :: proc(
         state_save_pos(state)
         return res, nil
     }
-    return parser_create(name, parse, skip, exec, parsers = []^Parser{parser})
+    return parser_create(name, parse, skip, exec, nil,
+                         parsers = create_parser_array(context.allocator, skip, input))
 }
 
 opt :: proc(
-    parser: ^Parser,
+    input: CombinatorInput,
     skip: SkipProc = SKIP,
     exec: ExecProc = nil,
     name: string = "opt",
@@ -128,7 +129,8 @@ opt :: proc(
         state_save_pos(state)
         return res, nil
     }
-    return parser_create(name, parse, skip, exec, parsers = []^Parser{parser})
+    return parser_create(name, parse, skip, exec, nil,
+                         parsers = create_parser_array(context.allocator, skip, input))
 }
 
 /*
@@ -137,7 +139,7 @@ opt :: proc(
  * first rule that can be applied on the input.
  */
 or :: proc(
-    parsers: ..^Parser,
+    inputs: ..CombinatorInput,
     skip: SkipProc = SKIP,
     exec: ExecProc = nil,
     name: string = "or",
@@ -160,7 +162,8 @@ or :: proc(
         }
         return nil, parser_error(SyntaxError, state, "none of the rules in `{}` could be applied.", self.name)
     }
-    return parser_create(name, parse, skip, exec, parsers = parsers)
+    return parser_create(name, parse, skip, exec, nil,
+                         parsers = create_parser_array(context.allocator, skip, ..inputs))
 }
 
 seq :: proc(
@@ -193,13 +196,12 @@ seq :: proc(
         state_save_pos(state)
         return res, nil
     }
-    return parser_create_from_dynamic_array(
-        name, parse, skip, exec, nil,
-        parsers = create_parser_array(context.allocator, skip, ..inputs))
+    return parser_create(name, parse, skip, exec, nil,
+                         parsers = create_parser_array(context.allocator, skip, ..inputs))
 }
 
 star :: proc(
-    parser: ^Parser,
+    inputs: ..CombinatorInput,
     skip: SkipProc = SKIP,
     exec: ExecProc = nil,
     name: string = "star",
@@ -221,11 +223,15 @@ star :: proc(
         }
         return nil, nil
     }
-    return parser_create(name, parse, skip, exec, parsers = []^Parser{parser})
+    if len(inputs) > 1 {
+        return parser_create(name, parse, skip, exec, parsers = []^Parser{seq(..inputs, skip = skip)})
+    }
+    return parser_create(name, parse, skip, exec, nil,
+                         parsers = create_parser_array(context.allocator, skip, ..inputs))
 }
 
 plus :: proc(
-    parser: ^Parser,
+    inputs: ..CombinatorInput,
     skip: SkipProc = SKIP,
     exec: ExecProc = nil,
     name: string = "plus",
@@ -247,12 +253,16 @@ plus :: proc(
         }
         return nil, parser_error(SyntaxError, state, "rule {%s}+ failed.", self.parsers[0].name)
     }
-    return parser_create(name, parse, skip, exec, parsers = []^Parser{parser})
+    if len(inputs) > 1 {
+        return parser_create(name, parse, skip, exec, parsers = []^Parser{seq(..inputs, skip = skip)})
+    }
+    return parser_create(name, parse, skip, exec, nil,
+                         parsers = create_parser_array(context.allocator, skip, ..inputs))
 }
 
 times :: proc(
     $nb_times: int,
-    parser: ^Parser,
+    inputs: ..CombinatorInput,
     skip: SkipProc = SKIP,
     exec: ExecProc = nil,
     name: string = "times",
@@ -277,7 +287,11 @@ times :: proc(
         return nil, parser_error(SyntaxError, state, "rule {%s}{%d} failed (%d found)",
                                  self.parsers[0].name, nb_times, count)
     }
-    return parser_create(name, parse, skip, exec, parsers = []^Parser{parser})
+    if len(inputs) > 1 {
+        return parser_create(name, parse, skip, exec, parsers = []^Parser{seq(..inputs, skip = skip)})
+    }
+    return parser_create(name, parse, skip, exec, nil,
+                         parsers = create_parser_array(context.allocator, skip, ..inputs))
 }
 
 /*
@@ -293,7 +307,7 @@ times :: proc(
  * parse("12345") => foo(["12345"])
  */
 combine :: proc(
-    parser: ^Parser,
+    inputs: ..CombinatorInput,
     skip: SkipProc = SKIP,
     exec: ExecProc = nil,
     name: string = "single",
@@ -309,7 +323,11 @@ combine :: proc(
         state_save_pos(state)
         return res, nil
     }
-    return parser_create(name, parse, skip, exec, parsers = []^Parser{parser})
+    if len(inputs) > 1 {
+        return parser_create(name, parse, skip, exec, parsers = []^Parser{seq(..inputs, skip = skip)})
+    }
+    return parser_create(name, parse, skip, exec, nil,
+                         parsers = create_parser_array(context.allocator, skip, ..inputs))
 }
 
 rec :: proc(parser: ^Parser) -> ^Parser {
@@ -354,7 +372,7 @@ rec :: proc(parser: ^Parser) -> ^Parser {
  *
  */
 lrec :: proc(
-    parsers: ..^Parser,
+    inputs: ..CombinatorInput,
     skip: SkipProc = SKIP,
     exec: ExecProc = nil,
     name: string = "lrec",
@@ -419,5 +437,6 @@ lrec :: proc(
         }
         return res, nil
     }
-    return parser_create(name, parse, skip, exec, parsers = parsers)
+    return parser_create(name, parse, skip, exec, nil,
+                         parsers = create_parser_array(context.allocator, skip, ..inputs))
 }
