@@ -23,7 +23,6 @@ RecursionData :: struct {
 
 GlobalParserState :: struct {
     // TODO: error_stack: [dynamic]ParserError
-    exec_data: rawptr,
     rd: RecursionData,
     error_allocator: mem.Allocator,
     tree_allocator: mem.Allocator,

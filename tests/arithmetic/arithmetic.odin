@@ -125,66 +125,66 @@ node_eval :: proc(node: ^Node) -> f32 {
 // exec functions //////////////////////////////////////////////////////////////
 
 exec_value :: proc($type: typeid) -> pcl.ExecProc {
-    return  proc(c: pcl.EC, d: pcl.ED) -> pcl.ER {
+    return  proc(data: ^pcl.ExecData) -> pcl.ExecResult {
         when DEBUG {
-            fmt.printfln("value: {}", c)
+            fmt.printfln("value: {}", data.content)
         }
-        ed := cast(^ExecData)d
+        ed := pcl.user_data(data, ^ExecData)
         node := new(Node, ed.node_allocator)
         when type == i32 {
-            value, ok := strconv.parse_int(pcl.ec(c, 0))
+            value, ok := strconv.parse_int(pcl.content(data, 0))
             assert(ok)
             node^ = cast(Value)cast(i32)value
         } else {
-            value, ok := strconv.parse_f32(pcl.ec(c, 0))
+            value, ok := strconv.parse_f32(pcl.content(data, 0))
             assert(ok)
             node^ = cast(Value)value
         }
-        return cast(rawptr)node
+        return pcl.result(data, node)
     }
 }
 
 exec_operator :: proc($op: Operator) -> pcl.ExecProc {
-    return proc(c: pcl.EC, d: pcl.ED) -> pcl.ER {
+    return proc(data: ^pcl.ExecData) -> pcl.ExecResult {
         when DEBUG {
-            fmt.printfln("operator: {}", c)
+            fmt.printfln("operator: {}", data.content)
         }
-        ed := cast(^ExecData)d
+        ed := pcl.user_data(data, ^ExecData)
         node := new(Node, ed.node_allocator)
         node^ = Operation{
             kind = op,
-            lhs = pcl.ec(^Node, c, 0),
-            rhs = pcl.ec(^Node, c, 2),
+            lhs = pcl.content(data, ^Node, 0),
+            rhs = pcl.content(data, ^Node, 2),
         }
-        return cast(rawptr)node
+        return pcl.result(data, node)
     }
 }
 
 exec_function :: proc($id: FunctionId) -> pcl.ExecProc {
-    return proc(c: pcl.EC, d: pcl.ED) -> pcl.ER {
+    return proc(data: ^pcl.ExecData) -> pcl.ExecResult {
         when DEBUG {
-            fmt.printfln("function: {}", c)
+            fmt.printfln("function: {}", data.content)
         }
-        ed := cast(^ExecData)d
+        ed := pcl.user_data(data, ^ExecData)
         node := new(Node, ed.node_allocator)
         node^ = Function{
             id = id,
-            expr = pcl.ec(^Node, c, 1)
+            expr = pcl.content(data, ^Node, 1)
         }
-        return cast(rawptr)node
+        return pcl.result(data, node)
     }
 }
 
-exec_parent :: proc(c: pcl.EC, d: pcl.ED) -> pcl.ER {
+exec_parent :: proc(data: ^pcl.ExecData) -> pcl.ExecResult {
     when DEBUG {
-        fmt.printfln("parent: {}", c)
+        fmt.printfln("parent: {}", data.content)
     }
-    ed := cast(^ExecData)d
+    ed := pcl.user_data(data, ^ExecData)
     node := new(Node, ed.node_allocator)
     node^ = Parent{
-        expr = pcl.ec(^Node, c, 1),
+        expr = pcl.content(data, ^Node, 1),
     }
-    return cast(rawptr)node
+    return pcl.result(data, node)
 }
 
 skip_spaces :: proc(char: rune) -> bool {

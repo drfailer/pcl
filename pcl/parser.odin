@@ -88,7 +88,7 @@ parser_create :: proc {
 parse_string :: proc(
     parser: ^Parser,
     str: string,
-    exec_data: rawptr = nil,
+    user_data: rawptr = nil,
 ) -> (state: ParserState, res: ExecResult, ok: bool) {
     // create the arena for the temporary allocations (error messages)
     bytes: [4096]u8
@@ -105,7 +105,6 @@ parse_string :: proc(
     // execute the given parser on the string and print error
     str := str
     global_state := GlobalParserState{
-        exec_data = exec_data,
         rd = RecursionData{
             depth = 0,
             top_nodes = make(map[^Parser]^ExecTreeNode),
@@ -133,13 +132,7 @@ parse_string :: proc(
         state_print_context(&state)
         ok = false
     } else {
-        // allocator for the exec tree
-        exec_arena: mem.Dynamic_Arena
-        mem.dynamic_arena_init(&exec_arena)
-        defer mem.dynamic_arena_destroy(&exec_arena)
-
-        res = exec_tree_node_execute(exec_tree, mem.dynamic_arena_allocator(&exec_arena))
-        exec_tree_node_destroy(exec_tree)
+        res = exec_tree_exec(exec_tree, user_data)
     }
     return state, res, ok
 }

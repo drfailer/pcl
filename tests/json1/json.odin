@@ -39,18 +39,18 @@ ExecData :: struct {
 }
 
 exec_number :: proc($type: typeid) -> pcl.ExecProc {
-    return  proc(c: pcl.EC, d: pcl.ED) -> pcl.ER {
+    return  proc(data: ^pcl.ExecData) -> pcl.ExecResult {
         when DEBUG {
-            fmt.printfln("number: {}", c)
+            fmt.printfln("number: {}", data.content)
         }
-        ed := cast(^ExecData)d
+        ed := cast(^ExecData)data.user_data
         value := new(JSON_Value, allocator = ed.exec_allocator)
         when type == i32 {
-            int_value, ok := strconv.parse_int(pcl.ec(c, 0))
+            int_value, ok := strconv.parse_int(pcl.content(data, 0))
             assert(ok)
             value^ = cast(JSON_Number)(cast(i32)int_value)
         } else {
-            f32_value, ok := strconv.parse_f32(pcl.ec(c, 0))
+            f32_value, ok := strconv.parse_f32(pcl.content(data, 0))
             assert(ok)
             value^ = cast(JSON_Number)f32_value
         }
@@ -58,70 +58,70 @@ exec_number :: proc($type: typeid) -> pcl.ExecProc {
     }
 }
 
-exec_string :: proc(c: pcl.EC, d: pcl.ED) -> pcl.ER {
+exec_string :: proc(data: ^pcl.ExecData) -> pcl.ExecResult {
     when DEBUG {
-        fmt.printfln("string: {}", c)
+        fmt.printfln("string: {}", data.content)
     }
-    ed := cast(^ExecData)d
+    ed := cast(^ExecData)data.user_data
     value := new(JSON_Value, allocator = ed.exec_allocator)
-    value^ = cast(JSON_String)pcl.ec(c, 0)
+    value^ = cast(JSON_String)pcl.content(data, 0)
     return cast(rawptr)value
 }
 
 exec_comma_separated_list :: proc($T: typeid, $name: string) -> pcl.ExecProc {
-    return proc(c: pcl.EC, d: pcl.ED) -> pcl.ER {
+    return proc(data: ^pcl.ExecData) -> pcl.ExecResult {
         when DEBUG {
-            fmt.printfln("{}: {}", name, c)
+            fmt.printfln("{}: {}", name, data.content)
         }
-        ed := cast(^ExecData)d
+        ed := pcl.user_data(data, ^ExecData)
         entries := new([dynamic]T, allocator = ed.exec_allocator)
         entries^ = make([dynamic]T, allocator = ed.exec_allocator)
-        if len(c) == 2 {
-            for elt in c[0].([dynamic]pcl.ER) {
-                append(entries, pcl.ec(^T, elt.([dynamic]pcl.ER)[:], 0)^)
+        if len(data.content) == 2 {
+            for elt in pcl.contents(data, 0) {
+                append(entries, pcl.content(elt, T, 0))
             }
         }
-        append(entries, pcl.ec(^T, c, len(c) - 1)^)
-        return cast(rawptr)entries
+        append(entries, pcl.content(data, T, len(data.content) - 1))
+        return pcl.result(data, entries)
     }
 }
 
-exec_list :: proc(c: pcl.EC, d: pcl.ED) -> pcl.ER {
+exec_list :: proc(data: ^pcl.ExecData) -> pcl.ExecResult {
     when DEBUG {
-        fmt.printfln("list: {}", c)
+        fmt.printfln("list: {}", data.content)
     }
-    ed := cast(^ExecData)d
+    ed := cast(^ExecData)data.user_data
     value := new(JSON_Value, allocator = ed.exec_allocator)
     list: JSON_List
-    if len(c) == 3 {
-        values := pcl.ec(^JSON_List, c, 1)
+    if len(data.content) == 3 {
+        values := pcl.content(data, ^JSON_List, 1)
         list = values^
     }
     value^ = list
     return cast(rawptr)value
 }
 
-exec_entry :: proc(c: pcl.EC, d: pcl.ED) -> pcl.ER {
+exec_entry :: proc(data: ^pcl.ExecData) -> pcl.ExecResult {
     when DEBUG {
-        fmt.printfln("entry: {}", c)
+        fmt.printfln("entry: {}", data.content)
     }
-    ed := cast(^ExecData)d
+    ed := cast(^ExecData)data.user_data
     entry := new(JSON_Entry, allocator = ed.exec_allocator)
-    entry.id = pcl.ec(c, 0)
-    value := pcl.ec(^JSON_Value, c, 2)
+    entry.id = pcl.content(data, 0)
+    value := pcl.content(data, ^JSON_Value, 2)
     entry.value = value^
     return cast(rawptr)entry
 }
 
-exec_object :: proc(c: pcl.EC, d: pcl.ED) -> pcl.ER {
+exec_object :: proc(data: ^pcl.ExecData) -> pcl.ExecResult {
     when DEBUG {
-        fmt.printfln("object: {}", c)
+        fmt.printfln("object: {}", data.content)
     }
-    ed := cast(^ExecData)d
+    ed := cast(^ExecData)data.user_data
     value := new(JSON_Value, allocator = ed.exec_allocator)
     object: JSON_Object
-    if len(c) > 2 {
-        entries := pcl.ec(^[dynamic]JSON_Entry, c, 1)
+    if len(data.content) > 2 {
+        entries := pcl.content(data, ^[dynamic]JSON_Entry, 1)
         object.entries = entries^
     }
     value^ = object
