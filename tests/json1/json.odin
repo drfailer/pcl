@@ -43,18 +43,17 @@ exec_number :: proc($type: typeid) -> pcl.ExecProc {
         when DEBUG {
             fmt.printfln("number: {}", data.content)
         }
-        ed := cast(^ExecData)data.user_data
-        value := new(JSON_Value, allocator = ed.exec_allocator)
+        value: JSON_Value
         when type == i32 {
             int_value, ok := strconv.parse_int(pcl.content(data, 0))
             assert(ok)
-            value^ = cast(JSON_Number)(cast(i32)int_value)
+            value = cast(JSON_Number)(cast(i32)int_value)
         } else {
             f32_value, ok := strconv.parse_f32(pcl.content(data, 0))
             assert(ok)
-            value^ = cast(JSON_Number)f32_value
+            value = cast(JSON_Number)f32_value
         }
-        return cast(rawptr)value
+        return pcl.result(data, value)
     }
 }
 
@@ -62,10 +61,8 @@ exec_string :: proc(data: ^pcl.ExecData) -> pcl.ExecResult {
     when DEBUG {
         fmt.printfln("string: {}", data.content)
     }
-    ed := cast(^ExecData)data.user_data
-    value := new(JSON_Value, allocator = ed.exec_allocator)
-    value^ = cast(JSON_String)pcl.content(data, 0)
-    return cast(rawptr)value
+    value: JSON_Value = cast(JSON_String)pcl.content(data, 0)
+    return pcl.result(data, value)
 }
 
 exec_comma_separated_list :: proc($T: typeid, $name: string) -> pcl.ExecProc {
@@ -74,14 +71,13 @@ exec_comma_separated_list :: proc($T: typeid, $name: string) -> pcl.ExecProc {
             fmt.printfln("{}: {}", name, data.content)
         }
         ed := pcl.user_data(data, ^ExecData)
-        entries := new([dynamic]T, allocator = ed.exec_allocator)
-        entries^ = make([dynamic]T, allocator = ed.exec_allocator)
+        entries := make([dynamic]T, allocator = ed.exec_allocator)
         if len(data.content) == 2 {
             for elt in pcl.contents(data, 0) {
-                append(entries, pcl.content(elt, T, 0))
+                append(&entries, pcl.content(elt, T, 0))
             }
         }
-        append(entries, pcl.content(data, T, len(data.content) - 1))
+        append(&entries, pcl.content(data, T, len(data.content) - 1))
         return pcl.result(data, entries)
     }
 }
@@ -90,42 +86,34 @@ exec_list :: proc(data: ^pcl.ExecData) -> pcl.ExecResult {
     when DEBUG {
         fmt.printfln("list: {}", data.content)
     }
-    ed := cast(^ExecData)data.user_data
-    value := new(JSON_Value, allocator = ed.exec_allocator)
-    list: JSON_List
+    value: JSON_Value = JSON_List{}
     if len(data.content) == 3 {
-        values := pcl.content(data, ^JSON_List, 1)
-        list = values^
+        value = pcl.content(data, JSON_List, 1)
     }
-    value^ = list
-    return cast(rawptr)value
+    return pcl.result(data, value)
 }
 
 exec_entry :: proc(data: ^pcl.ExecData) -> pcl.ExecResult {
     when DEBUG {
         fmt.printfln("entry: {}", data.content)
     }
-    ed := cast(^ExecData)data.user_data
-    entry := new(JSON_Entry, allocator = ed.exec_allocator)
-    entry.id = pcl.content(data, 0)
-    value := pcl.content(data, ^JSON_Value, 2)
-    entry.value = value^
-    return cast(rawptr)entry
+    return pcl.result(data, JSON_Entry{
+        id = pcl.content(data, 0),
+        value = pcl.content(data, JSON_Value, 2),
+    })
 }
 
 exec_object :: proc(data: ^pcl.ExecData) -> pcl.ExecResult {
     when DEBUG {
         fmt.printfln("object: {}", data.content)
     }
-    ed := cast(^ExecData)data.user_data
-    value := new(JSON_Value, allocator = ed.exec_allocator)
-    object: JSON_Object
+    value: JSON_Value = JSON_Object{}
     if len(data.content) > 2 {
-        entries := pcl.content(data, ^[dynamic]JSON_Entry, 1)
-        object.entries = entries^
+        value = JSON_Object{
+            entries = pcl.content(data, [dynamic]JSON_Entry, 1)
+        }
     }
-    value^ = object
-    return cast(rawptr)value
+    return pcl.result(data, value)
 }
 
 number_grammar :: proc() -> ^pcl.Parser {
