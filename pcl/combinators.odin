@@ -69,6 +69,18 @@ define :: proc(parser: ^Parser, impl: ^Parser) {
     parser.parsers[0] = impl
 }
 
+parser :: proc(
+    rule: ^Parser,
+    skip: SkipProc = SKIP,
+    exec: ExecProc = nil,
+    name: string = "single",
+) -> ^Parser {
+    rule.skip = skip
+    rule.exec = exec
+    rule.name = name
+    return rule
+}
+
 empty :: proc() -> ^Parser {
     parse := proc(self: ^Parser, state: ^ParserState) -> (res: ParseResult, err: ParserError) {
         return nil, nil
