@@ -1,5 +1,7 @@
 package pcl
 
+import "core:fmt"
+
 // characters and string literals //////////////////////////////////////////////
 
 apply_predicate :: proc(
@@ -125,6 +127,66 @@ lit :: proc { lit_c, lit_str }
 
 // block ///////////////////////////////////////////////////////////////////////
 
+// TODO: use the stack to add optional extra security
+block_char :: proc(
+    $opening: rune,
+    $closing: rune,
+    skip: SkipProc = SKIP,
+    exec: ExecProc = nil,
+    name: string = "block",
+) -> ^Parser {
+    parse := proc(self: ^Parser, state: ^ParserState) -> (res: ParseResult, err: ParserError) {
+        parser_skip(state, self.skip)
+        if state_char(state) != opening {
+            return nil, parser_error(SyntaxError, state, "opening symbol not found in `{}({}, {})`.",
+                                     self.name, opening, closing)
+        }
+        state_eat_one(state)
+        char_stack: [dynamic]rune
+        defer delete(char_stack)
+        append(&char_stack, opening)
+
+        begin_cur := state.cur
+        end_cur := state.cur
+        escaped := false
+
+        for len(char_stack) > 0 {
+            escaped = false
+            if state_eof(state) {
+                return nil, parser_error(SyntaxError, state,
+                                         "closing symbol not found in `{}({}, {})`.",
+                                         self.name, opening, closing)
+            }
+            if state_char(state) == '\\' {
+                escaped = true
+                state_eat_one(state)
+                state_eat_one(state)
+            }
+
+            if state_char(state) == closing {
+                if char_stack[len(char_stack) - 1] != closing {
+                    return nil, parser_error(SyntaxError, state,
+                                             "opening and closing simbol mismatch in `{}({}, {})`",
+                                             self.name, opening, closing)
+                }
+                pop(&char_stack)
+                end_cur = state.cur
+            } else if state_char(state) == opening {
+                append(&char_stack, closing)
+            }
+            state_eat_one(state)
+        }
+        cur := state.cur
+        state.pos = begin_cur
+        state.cur = end_cur
+        res = parser_exec(state, self.exec)
+        state.cur = cur
+        state_save_pos(state)
+        return res, nil
+    }
+    return parser_create(name, parse, skip, exec)
+}
+
 cursor_on_string :: proc(state: ^ParserState, $prefix: string) -> bool {
     state_idx := state.cur
     for c, idx in prefix {
@@ -136,7 +198,7 @@ cursor_on_string :: proc(state: ^ParserState, $prefix: string) -> bool {
     return true
 }
 
-block :: proc(
+block_str :: proc(
     $opening: string,
     $closing: string,
     skip: SkipProc = SKIP,
@@ -184,10 +246,63 @@ block :: proc(
     return parser_create(name, parse, skip, exec)
 }
 
+block :: proc {
+    block_char,
+    block_str,
+}
+
 // separated items list ////////////////////////////////////////////////////////
 
 // TODO:
 // - write a parser that takes a parser, a separator character and a bool (trailing coma authorized?)
 // - parse the expression using the parser and run the execute function using only the productions of the given parser (without the commas and on one list)
+
+separated_items :: proc(
+    parser: ^Parser,
+    $sep: rune,
+    $allow_trailing_sep: bool,
+    $allow_empty_list: bool,
+    skip: SkipProc = SKIP,
+    exec: ExecProc = nil,
+    name: string = "separated_items",
+) -> ^Parser {
+    parse := proc(self: ^Parser, state: ^ParserState) -> (res: ParseResult, err: ParserError) {
+        results := make([dynamic]ParseResult, allocator = state.global_state.tree_allocator)
+        sub_state: ParserState
+        trailing := false
+
+        for {
+            parser_skip(state, self.skip)
+            sub_state = state^
+            if res, err = parser_parse(&sub_state, self.parsers[0]); err != nil {
+                break
+            }
+            state_set(state, &sub_state)
+            append(&results, res)
+            trailing = false
+
+            parser_skip(state, self.skip)
+            if state_char(state) != sep {
+                break
+            }
+            state_eat_one(state)
+            state_save_pos(state)
+            trailing = true
+        }
+
+        if trailing && !allow_trailing_sep {
+            return nil, parser_error(SyntaxError, state, "trailing character found in `{}({})`.",
+                                     self.name, sep)
+        }
+        if len(results) == 0 && !allow_empty_list {
+            return nil, parser_error(SyntaxError, state, "no items found in `{}({})`.",
+                                     self.name, sep)
+        }
+        res = parser_exec(state, self.exec, results)
+        state_save_pos(state)
+        return res, nil
+    }
+    return parser_create(name, parse, skip, exec, parsers = []^Parser{parser})
+}
 
 // numbers /////////////////////////////////////////////////////////////////////

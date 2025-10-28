@@ -65,21 +65,33 @@ exec_string :: proc(data: ^pcl.ExecData) -> pcl.ExecResult {
     return pcl.result(data, value)
 }
 
-exec_comma_separated_list :: proc($T: typeid, $name: string) -> pcl.ExecProc {
-    return proc(data: ^pcl.ExecData) -> pcl.ExecResult {
-        when DEBUG {
-            fmt.printfln("{}: {}", name, data.content)
-        }
-        ed := pcl.user_data(data, ^ExecData)
-        entries := make([dynamic]T, allocator = ed.exec_allocator)
-        if len(data.content) == 2 {
-            for elt in pcl.contents(data, 0) {
-                append(&entries, pcl.content(elt, T, 0))
-            }
-        }
-        append(&entries, pcl.content(data, T, len(data.content) - 1))
-        return pcl.result(data, entries)
+// exec using separated itmes rule
+exec_values :: proc(data: ^pcl.ExecData) -> pcl.ExecResult {
+    when DEBUG {
+        fmt.printfln("values: {}", data.content)
     }
+    ed := pcl.user_data(data, ^ExecData)
+    values := make([dynamic]JSON_Value, allocator = ed.exec_allocator)
+    for i in 0..<len(data.content) {
+        append(&values, pcl.content(data, JSON_Value, i))
+    }
+    return pcl.result(data, values)
+}
+
+// exec using star
+exec_entries :: proc(data: ^pcl.ExecData) -> pcl.ExecResult {
+    when DEBUG {
+        fmt.printfln("entries: {}", data.content)
+    }
+    ed := pcl.user_data(data, ^ExecData)
+    entries := make([dynamic]JSON_Entry, allocator = ed.exec_allocator)
+    if len(data.content) == 2 {
+        for elt in pcl.contents(data, 0) {
+            append(&entries, pcl.content(elt, JSON_Entry, 0))
+        }
+    }
+    append(&entries, pcl.content(data, JSON_Entry, len(data.content) - 1))
+    return pcl.result(data, entries)
 }
 
 exec_list :: proc(data: ^pcl.ExecData) -> pcl.ExecResult {
@@ -134,15 +146,15 @@ json_grammar :: proc(allocator: pcl.ParserAllocator) -> ^pcl.Parser {
     json_object := declare(name = "object", exec = exec_object)
 
     value   := declare(name = "value")
-    values  := seq(star(value, ','), value, exec = exec_comma_separated_list(JSON_Value, "values"))
+    values  := separated_items(value, ',', false, false, exec = exec_values)
     number  := single(number_grammar())
-    jstring := block("\"", "\"", exec = exec_string)
+    jstring := block('"', '"', exec = exec_string)
     list    := seq('[', opt(values), ']', name = "list", exec = exec_list)
     define(value, or(list, number, jstring, json_object))
 
-    id      := block("\"", "\"")
+    id      := block('"', '"')
     entry   := seq(id, ':', value, name = "entry", exec = exec_entry)
-    entries := seq(star(entry, ','), entry, exec = exec_comma_separated_list(JSON_Entry, "entries"))
+    entries := seq(star(entry, ','), entry, exec = exec_entries)
     define(json_object, seq('{', opt(entries), '}'))
     return json_object
 }
