@@ -1,5 +1,12 @@
 package json2
 
+/*
+ * This second version of the json parser uses the same structure, but the exec
+ * functions don't return values. Instead, the ExecData accumulates the values
+ * and entries to build the final JSON object. In this test, no allocation is
+ * made by pcl (for the values, of course the exec tree is always allocated).
+ */
+
 import "pcl:pcl"
 import "core:strconv"
 import "core:fmt"

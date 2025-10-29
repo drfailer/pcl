@@ -1,5 +1,24 @@
 package json1
 
+/*
+ * Implementation of the json grammar the uses result copy: here, the exec
+ * functions return the value as a result.
+ *
+ * Note that nodes are not allocated directly in the exec functions, which
+ * means that the `result` function from pcl needs to make the dynamic
+ * allocation and the copy. This system was implemented for convenience: since
+ * the parser result type is not generic (and it shouldn't be since it would
+ * increase the complexity a lot), the result must be stored as a rawptr and
+ * therefore cannot be returned by value directly, which means that a dynamic
+ * allocation needs to be made. If the user structure doesn't use pointers, pcl
+ * will make a dynamic allocation and a copy automatically to store the
+ * resulting value (none of this is done if the user returns a pointer). All
+ * allocation are done using an internal arena.
+ *
+ * Note: this version allso test the separated_items parser.
+ * Note: to avoid dynamic allocation, see the json2 implementation.
+ */
+
 import "pcl:pcl"
 import "core:strconv"
 import "core:fmt"
