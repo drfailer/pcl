@@ -1,6 +1,7 @@
 package pcl
 
 import "core:fmt"
+import "core:log"
 
 // characters and string literals //////////////////////////////////////////////
 
@@ -127,7 +128,24 @@ lit :: proc { lit_c, lit_str }
 
 // block ///////////////////////////////////////////////////////////////////////
 
-// TODO: use the stack to add optional extra security
+/*
+ * The block parers are used to create "half-parsers". They parse the opening
+ * symbol, look for the closing one and return the text in between as a string.
+ * This can be useful for writing a text-based preprocessor.
+ */
+
+/*
+ * The char version of the block parser expects the bracket matching to be
+ * correct, therefore, it will not raise any syntax error if brackets do not
+ * match. This is done to allow ignoring wrapped closing symbols:
+ *
+ * c_code_block := block('{', '}')
+ * content := `
+ *     {
+ *         printf("}"); // this closing bracket will be ignored
+ *     }
+ * `
+ */
 block_char :: proc(
     $opening: rune,
     $closing: rune,
@@ -136,43 +154,81 @@ block_char :: proc(
     name: string = "block",
 ) -> ^Parser {
     parse := proc(self: ^Parser, state: ^ParserState) -> (res: ParseResult, err: ParserError) {
+        is_closing_map: map[rune]bool
+        defer delete(is_closing_map)
+        char_stack: [dynamic]rune
+        defer delete(char_stack)
+
         parser_skip(state, self.skip)
         if state_char(state) != opening {
             return nil, parser_error(SyntaxError, state, "opening symbol not found in `{}({}, {})`.",
                                      self.name, opening, closing)
         }
         state_eat_one(state)
-        char_stack: [dynamic]rune
-        defer delete(char_stack)
-        append(&char_stack, opening)
+        append(&char_stack, closing)
 
         begin_cur := state.cur
         end_cur := state.cur
         escaped := false
+        if opening == closing {
+            is_closing_map[opening] = true
+        }
+
+        opening_char := opening
+        closing_char := closing
 
         for len(char_stack) > 0 {
             escaped = false
             if state_eof(state) {
                 return nil, parser_error(SyntaxError, state,
-                                         "closing symbol not found in `{}({}, {})`.",
+                                         "closing symbol not found in `{}('{}', '{}')`.",
                                          self.name, opening, closing)
             }
             if state_char(state) == '\\' {
                 escaped = true
                 state_eat_one(state)
                 state_eat_one(state)
+                continue
             }
 
-            if state_char(state) == closing {
-                if char_stack[len(char_stack) - 1] != closing {
-                    return nil, parser_error(SyntaxError, state,
-                                             "opening and closing simbol mismatch in `{}({}, {})`",
-                                             self.name, opening, closing)
+            switch state_char(state) {
+            case '(', ')':
+                opening_char = '('
+                closing_char = ')'
+            case '{', '}':
+                opening_char = '{'
+                closing_char = '}'
+            case '[', ']':
+                opening_char = '['
+                closing_char = ']'
+            case '<', '>':
+                opening_char = '<'
+                closing_char = '>'
+            case '"':
+                opening_char = '"'
+                closing_char = '"'
+            case '\'':
+                opening_char = '\''
+                closing_char = '\''
+            case:
+                opening_char = opening
+                closing_char = closing
+            }
+
+            closing_condition := state_char(state) == closing_char
+            if closing_condition && opening_char == closing_char {
+                closing_condition = is_closing_map[opening_char]
+                is_closing_map[opening_char] = !is_closing_map[opening_char]
+            }
+
+            if closing_condition {
+                if char_stack[len(char_stack) - 1] == closing_char {
+                    pop(&char_stack)
+                    end_cur = state.cur
+                } else {
                 }
-                pop(&char_stack)
-                end_cur = state.cur
-            } else if state_char(state) == opening {
-                append(&char_stack, closing)
+            } else if state_char(state) == opening_char {
+                append(&char_stack, closing_char)
             }
             state_eat_one(state)
         }
@@ -252,10 +308,6 @@ block :: proc {
 }
 
 // separated items list ////////////////////////////////////////////////////////
-
-// TODO:
-// - write a parser that takes a parser, a separator character and a bool (trailing coma authorized?)
-// - parse the expression using the parser and run the execute function using only the productions of the given parser (without the commas and on one list)
 
 separated_items :: proc(
     parser: ^Parser,
