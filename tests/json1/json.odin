@@ -155,10 +155,8 @@ number_grammar :: proc() -> ^pcl.Parser {
     return or(floats, ints)
 }
 
-json_grammar :: proc(allocator: pcl.ParserAllocator) -> ^pcl.Parser {
+json_grammar :: proc() -> ^pcl.Parser {
     using pcl
-
-    context.allocator = allocator
 
     pcl.SKIP = proc(char: rune) -> bool { return u8(char) == ' ' || u8(char) == '\n' }
 
@@ -180,9 +178,9 @@ json_grammar :: proc(allocator: pcl.ParserAllocator) -> ^pcl.Parser {
 
 @(test)
 test_object :: proc(t: ^testing.T) {
-    parser_allocator := pcl.parser_allocator_create()
-    defer pcl.parser_allocator_destroy(parser_allocator)
-    json_parser := json_grammar(parser_allocator)
+    pcl_handle := pcl.create()
+    defer pcl.destroy(pcl_handle)
+    json_parser := pcl_handle->make_grammar(json_grammar)
 
     exec_arena_data: [16384]byte
     exec_arena: mem.Arena
@@ -232,9 +230,9 @@ test_object :: proc(t: ^testing.T) {
 }
 
 main :: proc() {
-    parser_allocator := pcl.parser_allocator_create()
-    defer pcl.parser_allocator_destroy(parser_allocator)
-    json_parser := json_grammar(parser_allocator)
+    pcl_handle := pcl.create()
+    defer pcl.destroy(pcl_handle)
+    json_parser := pcl_handle->make_grammar(json_grammar)
 
     exec_arena_data: [16384]byte
     exec_arena: mem.Arena
