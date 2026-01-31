@@ -71,11 +71,16 @@ exec_tree_node_exec :: proc(node: ^ExecTreeNode, exec_data: ^ExecData) -> ExecRe
 
         if node.ctx.exec == nil {
             if len(childs_results) == 1 {
-                return childs_results[0]
+                result := childs_results[0]
+                delete(childs_results)
+                return result
             }
             return childs_results
         } else {
             exec_data.content = childs_results[:]
+            result := node.ctx.exec(exec_data)
+            delete(childs_results)
+            return result
         }
     }
     return node.ctx.exec(exec_data)

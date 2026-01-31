@@ -239,6 +239,7 @@ parser_exec_with_childs :: proc(state: ^ParserState, exec: ExecProc, childs: [dy
             if exec == nil {
                 if len(childs_results) == 1 {
                     pr = childs_results[0]
+                    delete(childs_results)
                 } else {
                     pr = cast(ExecResult)childs_results
                 }
@@ -248,6 +249,7 @@ parser_exec_with_childs :: proc(state: ^ParserState, exec: ExecProc, childs: [dy
                     user_data = state.global_state.user_data,
                     allocator = state.global_state.exec_allocator,
                 })
+                delete(childs_results)
             }
         }
     } else {
