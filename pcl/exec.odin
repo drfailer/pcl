@@ -6,7 +6,8 @@ import "base:intrinsics"
 /*
  * The purpose of PCL is not to build an AST in which nodes are elements of the
  * grammar. Instead, PCL builds a tree of execution context that allow to call
- * user callback functions during the parsing.
+ * user callback functions during the parsing. The tree is only built when the
+ * parser is in a branch or a left recursive rule.
  */
 
 ExecTreeNode :: struct {
