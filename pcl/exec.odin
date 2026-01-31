@@ -11,7 +11,7 @@ import "base:intrinsics"
 
 ExecTreeNode :: struct {
     ctx: ExecContext,
-    childs: [dynamic]^ExecTreeNode,
+    childs: [dynamic]ParseResult,
 }
 
 ExecContext :: struct {
@@ -33,14 +33,10 @@ ExecData :: struct {
 
 ExecProc :: proc(data: ^ExecData) -> ExecResult
 
-exec_tree_exec :: proc(root: ^ExecTreeNode, user_data: rawptr) -> ExecResult {
-    exec_arena: mem.Dynamic_Arena
-    mem.dynamic_arena_init(&exec_arena)
-    defer mem.dynamic_arena_destroy(&exec_arena)
-
+exec_tree_exec :: proc(root: ^ExecTreeNode, user_data: rawptr, allocator: mem.Allocator) -> ExecResult {
     exec_data := ExecData{
         user_data = user_data,
-        allocator = mem.dynamic_arena_allocator(&exec_arena),
+        allocator = allocator,
     }
 
     return exec_tree_node_exec(root, &exec_data)
@@ -63,8 +59,13 @@ exec_tree_node_exec :: proc(node: ^ExecTreeNode, exec_data: ^ExecData) -> ExecRe
         childs_results := make([dynamic]ExecResult, allocator = exec_data.allocator)
 
         for child in node.childs {
-            if child != nil {
-                append(&childs_results, exec_tree_node_exec(child, exec_data))
+            switch c in child {
+            case (^ExecTreeNode):
+                if child != nil {
+                    append(&childs_results, exec_tree_node_exec(c, exec_data))
+                }
+            case (ExecResult):
+                append(&childs_results, c)
             }
         }
 

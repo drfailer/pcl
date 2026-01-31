@@ -18,14 +18,17 @@ Location :: struct {
 // used for left recursive grammars
 RecursionData :: struct {
     depth: u64,
-    top_nodes: map[^Parser]^ExecTreeNode,
+    top_nodes: map[^Parser]ParseResult,
 }
 
 GlobalParserState :: struct {
     // TODO: error_stack: [dynamic]ParserError
     rd: RecursionData,
+    branch_depth: u64,
     error_allocator: mem.Allocator,
-    tree_allocator: mem.Allocator,
+    tree_allocator: mem.Allocator, // TODO: this should be a pool
+    exec_allocator: mem.Allocator,
+    user_data: rawptr,
 }
 
 ParserState :: struct {
@@ -34,6 +37,14 @@ ParserState :: struct {
     cur: int,
     loc: Location,
     global_state: ^GlobalParserState,
+}
+
+state_enter_branch :: proc(state: ^ParserState) {
+    state.global_state.branch_depth += 1
+}
+
+state_leave_branch :: proc(state: ^ParserState) {
+    state.global_state.branch_depth -= 1
 }
 
 state_set :: proc(dest: ^ParserState, src: ^ParserState) {

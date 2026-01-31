@@ -20,7 +20,13 @@ ParserData :: union {
     rune,
 }
 
-ParseResult :: ^ExecTreeNode
+// ParseResult :: ^ExecTreeNode
+
+ParseResult :: union {
+    ^ExecTreeNode,
+    ExecResult,
+}
+
 
 SkipProc :: proc(c: rune) -> bool // TODO: should it take the state?
 
@@ -102,20 +108,28 @@ parse_string :: proc(
     defer mem.dynamic_arena_destroy(&tree_arena)
     tree_allocator := mem.dynamic_arena_allocator(&tree_arena)
 
+    // allocator for the execution
+    exec_arena: mem.Dynamic_Arena
+    mem.dynamic_arena_init(&exec_arena)
+    defer mem.dynamic_arena_destroy(&exec_arena)
+    exec_allocator := mem.dynamic_arena_allocator(&exec_arena)
+
     // execute the given parser on the string and print error
     str := str
     global_state := GlobalParserState{
         rd = RecursionData{
             depth = 0,
-            top_nodes = make(map[^Parser]^ExecTreeNode),
+            top_nodes = make(map[^Parser]ParseResult),
         },
         error_allocator = error_allocator,
-        tree_allocator = tree_allocator,
+        tree_allocator = tree_allocator, // TODO: create a node pool
+        exec_allocator = exec_allocator,
+        user_data = user_data,
     }
     defer delete(global_state.rd.top_nodes)
     state = state_create(&str, &global_state)
     defer state_destroy(&state)
-    exec_tree, err := parser_parse(&state, parser)
+    parse_result, err := parser_parse(&state, parser)
 
     ok = true
     if err != nil {
@@ -132,7 +146,10 @@ parse_string :: proc(
         state_print_context(&state)
         ok = false
     } else {
-        res = exec_tree_exec(exec_tree, user_data)
+        switch result in parse_result {
+        case(^ExecTreeNode): res = exec_tree_exec(result, user_data, exec_allocator)
+        case(ExecResult): res = result
+        }
     }
     return state, res, ok
 }
@@ -188,11 +205,57 @@ parser_error :: proc($error_type: typeid, state: ^ParserState, str: string, args
 // exec tree functions /////////////////////////////////////////////////////////
 
 parser_exec_with_childs :: proc(state: ^ParserState, exec: ExecProc, childs: [dynamic]ParseResult) -> ParseResult {
-    node := new(ExecTreeNode, state.global_state.tree_allocator)
-    // node := new(ExecTreeNode)
-    node.ctx = ExecContext{exec, state^}
-    node.childs = childs
-    return node
+    pr: ParseResult
+
+    // fmt.printfln("rec depth = {}, branch depth = {}", state.global_state.rd.depth, state.global_state.branch_depth)
+    if state.global_state.rd.depth == 0 && state.global_state.branch_depth == 0 {
+        if len(childs) == 0 {
+            if exec == nil {
+                pr = cast(ExecResult)state_string(state)
+            } else {
+                pr = exec(&ExecData{
+                    content = []ExecResult{cast(ExecResult)state_string(state)},
+                    user_data = state.global_state.user_data,
+                    allocator = state.global_state.exec_allocator,
+                })
+            }
+        } else {
+            childs_results := make([dynamic]ExecResult, allocator = state.global_state.exec_allocator)
+
+            for child in childs {
+                switch c in child {
+                case (^ExecTreeNode):
+                    if child != nil {
+                        append(&childs_results, exec_tree_exec(
+                                      c,
+                                      state.global_state.user_data,
+                                      state.global_state.exec_allocator))
+                    }
+                case (ExecResult):
+                    append(&childs_results, c)
+                }
+            }
+
+            if exec == nil {
+                if len(childs_results) == 1 {
+                    pr = childs_results[0]
+                } else {
+                    pr = cast(ExecResult)childs_results
+                }
+            } else {
+                pr = exec(&ExecData{
+                    content = childs_results[:],
+                    user_data = state.global_state.user_data,
+                    allocator = state.global_state.exec_allocator,
+                })
+            }
+        }
+    } else {
+        pr = new(ExecTreeNode, state.global_state.tree_allocator)
+        pr.(^ExecTreeNode).ctx = ExecContext{exec, state^}
+        pr.(^ExecTreeNode).childs = childs
+    }
+    return pr
 }
 
 parser_exec_with_child :: proc(state: ^ParserState, exec: ExecProc, result: ParseResult) -> ParseResult {

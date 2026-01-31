@@ -159,6 +159,7 @@ or :: proc(
     parse := proc(self: ^Parser, state: ^ParserState) -> (res: ParseResult, err: ParserError) {
         parser_skip(state, self.skip)
 
+        state_enter_branch(state)
         for parser in self.parsers {
             sub_state := state^
             sub_res: ParseResult
@@ -166,6 +167,7 @@ or :: proc(
 
             if sub_res, sub_err = parser_parse(&sub_state, parser); sub_err == nil {
                 state_set(state, &sub_state)
+                state_leave_branch(state)
                 res = parser_exec(state, self.exec, sub_res)
                 state_save_pos(state)
                 return res, nil
@@ -347,7 +349,7 @@ rec :: proc(parser: ^Parser) -> ^Parser {
         recursive_rule := self.parsers[0]
 
         old_top_nodes := state.global_state.rd.top_nodes
-        state.global_state.rd.top_nodes = make(map[^Parser]^ExecTreeNode)
+        state.global_state.rd.top_nodes = make(map[^Parser]ParseResult)
         defer {
             delete(state.global_state.rd.top_nodes)
             state.global_state.rd.top_nodes = old_top_nodes
@@ -403,8 +405,8 @@ lrec :: proc(
         }
 
         if recursive_rule in state.global_state.rd.top_nodes {
-            state.global_state.rd.top_nodes[recursive_rule].childs[len(self.parsers) - 1] = res
-            state.global_state.rd.top_nodes[recursive_rule].ctx.state.cur = state.pos
+            state.global_state.rd.top_nodes[recursive_rule].(^ExecTreeNode).childs[len(self.parsers) - 1] = res
+            state.global_state.rd.top_nodes[recursive_rule].(^ExecTreeNode).ctx.state.cur = state.pos
             res = state.global_state.rd.top_nodes[recursive_rule]
         }
 
@@ -416,7 +418,7 @@ lrec :: proc(
         }
 
 
-        childs := make([dynamic]^ExecTreeNode, len(self.parsers), allocator = state.global_state.tree_allocator)
+        childs := make([dynamic]ParseResult, len(self.parsers), allocator = state.global_state.tree_allocator)
         childs[0] = res
 
         // apply middle rules
@@ -430,7 +432,7 @@ lrec :: proc(
 
         parser_skip(state, self.skip)
         res = parser_exec(state, self.exec, childs)
-        res.ctx.state.pos = childs[0].ctx.state.pos
+        res.(^ExecTreeNode).ctx.state.pos = childs[0].(^ExecTreeNode).ctx.state.pos
         state.global_state.rd.top_nodes[recursive_rule] = res
 
         // apply recursive rule
