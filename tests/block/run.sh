@@ -1,3 +1,3 @@
 #!/usr/bin/env bash
 
-odin run block.odin -file -collection:pcl=../../ -debug
+odin test block.odin -file -collection:pcl=../../ -debug
