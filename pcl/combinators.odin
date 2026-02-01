@@ -102,9 +102,7 @@ single :: proc(
             return nil, err
         }
         state_set(state, &sub_state)
-        if self.exec != nil {
-            res = parser_exec(state, self.exec, res)
-        }
+        res = parser_exec(state, self.exec, res)
         state_save_pos(state)
         return res, nil
     }
@@ -135,9 +133,7 @@ opt :: proc(
         }
         free_all(state.global_state.error_allocator)
         state_set(state, &sub_state)
-        if self.exec != nil {
-            res = parser_exec(state, self.exec, res)
-        }
+        res = parser_exec(state, self.exec, res)
         state_save_pos(state)
         return res, nil
     }
