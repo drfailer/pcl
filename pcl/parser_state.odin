@@ -28,6 +28,7 @@ GlobalParserState :: struct {
     error_allocator: mem.Allocator,
     tree_allocator: mem.Allocator, // TODO: this should be a pool
     exec_allocator: mem.Allocator,
+    exec_node_pool: MemoryPool(ExecTreeNode),
     user_data: rawptr,
 }
 

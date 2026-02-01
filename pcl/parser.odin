@@ -114,6 +114,12 @@ parse_string :: proc(
     defer mem.dynamic_arena_destroy(&exec_arena)
     exec_allocator := mem.dynamic_arena_allocator(&exec_arena)
 
+    exec_node_pool := memory_pool_create(ExecTreeNode, 0, exec_allocator)
+    // This is not required because we are using an arena. However, we can use
+    // the debug version to verify if some elements where not released as well
+    // as knowing the number of elements allocated in total.
+    defer memory_pool_destroy_debug(&exec_node_pool)
+
     // execute the given parser on the string and print error
     str := str
     global_state := GlobalParserState{
@@ -124,6 +130,7 @@ parse_string :: proc(
         error_allocator = error_allocator,
         tree_allocator = tree_allocator, // TODO: create a node pool
         exec_allocator = exec_allocator,
+        exec_node_pool = exec_node_pool,
         user_data = user_data,
     }
     defer delete(global_state.rd.top_nodes)
@@ -147,7 +154,7 @@ parse_string :: proc(
         ok = false
     } else {
         switch result in parse_result {
-        case(^ExecTreeNode): res = exec_tree_exec(result, user_data, exec_allocator)
+        case(^ExecTreeNode): res = exec_tree_exec(result, user_data, exec_allocator, &exec_node_pool)
         case(ExecResult): res = result
         }
     }
@@ -229,7 +236,9 @@ parser_exec_with_childs :: proc(state: ^ParserState, exec: ExecProc, childs: [dy
                         append(&childs_results, exec_tree_exec(
                                       c,
                                       state.global_state.user_data,
-                                      state.global_state.exec_allocator))
+                                      state.global_state.exec_allocator,
+                                      &state.global_state.exec_node_pool,
+                                      ))
                     }
                 case (ExecResult):
                     append(&childs_results, c)
@@ -253,7 +262,7 @@ parser_exec_with_childs :: proc(state: ^ParserState, exec: ExecProc, childs: [dy
             }
         }
     } else {
-        pr = new(ExecTreeNode, state.global_state.tree_allocator)
+        pr = memory_pool_allocate(&state.global_state.exec_node_pool)
         pr.(^ExecTreeNode).ctx = ExecContext{exec, state^}
         pr.(^ExecTreeNode).childs = childs
     }

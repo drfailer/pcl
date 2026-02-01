@@ -30,14 +30,21 @@ ExecData :: struct {
     content: []ExecResult,
     user_data: rawptr,
     allocator: mem.Allocator,
+    node_pool: ^MemoryPool(ExecTreeNode),
 }
 
 ExecProc :: proc(data: ^ExecData) -> ExecResult
 
-exec_tree_exec :: proc(root: ^ExecTreeNode, user_data: rawptr, allocator: mem.Allocator) -> ExecResult {
+exec_tree_exec :: proc(
+    root: ^ExecTreeNode,
+    user_data: rawptr,
+    allocator: mem.Allocator,
+    node_pool: ^MemoryPool(ExecTreeNode),
+) -> ExecResult {
     exec_data := ExecData{
         user_data = user_data,
         allocator = allocator,
+        node_pool = node_pool,
     }
 
     return exec_tree_node_exec(root, &exec_data)
@@ -51,6 +58,9 @@ exec_tree_exec :: proc(root: ^ExecTreeNode, user_data: rawptr, allocator: mem.Al
  * - childs & exec       => return exec(childs_results)
  */
 exec_tree_node_exec :: proc(node: ^ExecTreeNode, exec_data: ^ExecData) -> ExecResult {
+    // release the node once the execution is done
+    defer memory_pool_release(exec_data.node_pool, node)
+
     if len(node.childs) == 0 {
         if node.ctx.exec == nil {
             return state_string(&node.ctx.state)
