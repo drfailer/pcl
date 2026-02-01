@@ -18,6 +18,7 @@ Parser :: struct {
 ParserData :: union {
     string,
     rune,
+    rawptr,
 }
 
 // ParseResult :: ^ExecTreeNode
