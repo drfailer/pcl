@@ -1,1 +1,1 @@
-odin test . -debug -collection:pcl=../ -all-packages
+odin test . -debug -collection:pcl=../ -all-packages #-o:speed

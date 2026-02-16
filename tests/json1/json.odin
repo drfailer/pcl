@@ -163,7 +163,7 @@ json_grammar :: proc() -> ^pcl.Parser {
     json_object := declare(name = "object", exec = exec_object)
 
     value   := declare(name = "value")
-    values  := separated_items(value, ',', false, false, exec = exec_values)
+    values  := separated_items(value, ',', allow_empty_list = false, exec = exec_values)
     number  := single(number_grammar())
     jstring := block('"', '"', exec = exec_string)
     list    := seq('[', opt(values), ']', name = "list", exec = exec_list)

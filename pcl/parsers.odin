@@ -327,17 +327,24 @@ block :: proc {
 
 // separated items list ////////////////////////////////////////////////////////
 
-// TODO: it would be better to have multiple functions with default arguments
+SeparatedItemsParser :: struct {
+    using parser: Parser,
+    allow_trailing_separator: bool,
+    allow_empty_list: bool,
+    separator: rune,
+}
+
 separated_items :: proc(
     parser: ^Parser,
-    $sep: rune,
-    $allow_trailing_sep: bool,
-    $allow_empty_list: bool,
+    separator: rune,
+    allow_trailing_separator: bool = false,
+    allow_empty_list: bool = true,
     skip: SkipProc = SKIP,
     exec: ExecProc = nil,
     name: string = "separated_items",
 ) -> ^Parser {
-    parse := proc(self: ^Parser, state: ^ParserState) -> (res: ParseResult, err: ParserError) {
+    parse := proc(parser: ^Parser, state: ^ParserState) -> (res: ParseResult, err: ParserError) {
+        self := cast(^SeparatedItemsParser)parser
         results := make([dynamic]ParseResult, allocator = state.global_state.tree_allocator)
         sub_state: ParserState
         trailing := false
@@ -353,7 +360,7 @@ separated_items :: proc(
             trailing = false
 
             parser_skip(state, self.skip)
-            if state_char(state) != sep {
+            if state_char(state) != self.separator {
                 break
             }
             state_eat_one(state)
@@ -361,19 +368,23 @@ separated_items :: proc(
             trailing = true
         }
 
-        if trailing && !allow_trailing_sep {
+        if trailing && !self.allow_trailing_separator {
             return nil, parser_error(SyntaxError, state, "trailing character found in `{}({})`.",
-                                     self.name, sep)
+                                     self.name, self.separator)
         }
-        if len(results) == 0 && !allow_empty_list {
+        if len(results) == 0 && !self.allow_empty_list {
             return nil, parser_error(SyntaxError, state, "no items found in `{}({})`.",
-                                     self.name, sep)
+                                     self.name, self.separator)
         }
         res = parser_exec(state, self.exec, results)
         state_save_pos(state)
         return res, nil
     }
-    return parser_create(name, parse, skip, exec, parsers = []^Parser{parser})
+    parser := parser_create(SeparatedItemsParser, name, parse, skip, exec, parsers = []^Parser{parser})
+    parser.separator = separator
+    parser.allow_trailing_separator = allow_trailing_separator
+    parser.allow_empty_list = allow_empty_list
+    return parser
 }
 
 // numbers /////////////////////////////////////////////////////////////////////
