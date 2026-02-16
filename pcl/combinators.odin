@@ -168,6 +168,11 @@ or :: proc(
                 state_save_pos(state)
                 return res, nil
             }
+            // in this case, we free all the nodes allocated by the failed parser
+            // FIXME: this doesn't work because when a parser fails, it does not return his result
+            #partial switch sr in sub_res {
+            case (^ExecTreeNode): memory_pool_release_from_root(&state.global_state.exec_node_pool, sr)
+            }
             free_all(state.global_state.error_allocator)
         }
         return nil, parser_error(SyntaxError, state, "none of the rules in `{}` could be applied.", self.name)

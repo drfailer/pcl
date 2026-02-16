@@ -100,3 +100,15 @@ memory_pool_release :: proc(pool: ^MemoryPool($T), data: ^T) {
     node.next = pool.free_nodes
     pool.free_nodes = node
 }
+
+
+memory_pool_release_from_root :: proc(pool: ^MemoryPool($T), root_data: ^T) {
+    node := cast(^MemoryPoolNode(T))root_data
+    if node.next != nil {
+        node.next.prev = nil
+    }
+    head_node := pool.used_nodes
+    pool.used_nodes = node.next
+    node.next = pool.free_nodes
+    pool.free_nodes = head_node
+}
