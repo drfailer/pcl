@@ -52,7 +52,7 @@ declare :: proc(
         }
         return res, nil
     }
-    return parser_create(name, parse, skip, exec, parsers = []^Parser{nil})
+    return parser_create(name, parse, skip, exec, []^Parser{nil})
 }
 
 define :: proc(parser: ^Parser, impl: ^Parser) {
@@ -106,8 +106,7 @@ single :: proc(
         state_save_pos(state)
         return res, nil
     }
-    return parser_create(name, parse, skip, exec, nil,
-                         parsers = create_parser_array(context.allocator, skip, input))
+    return parser_create(name, parse, skip, exec, create_parser_array(context.allocator, skip, input))
 }
 
 opt :: proc(
@@ -137,8 +136,7 @@ opt :: proc(
         state_save_pos(state)
         return res, nil
     }
-    return parser_create(name, parse, skip, exec, nil,
-                         parsers = create_parser_array(context.allocator, skip, input))
+    return parser_create(name, parse, skip, exec, create_parser_array(context.allocator, skip, input))
 }
 
 /*
@@ -177,8 +175,7 @@ or :: proc(
         }
         return nil, parser_error(SyntaxError, state, "none of the rules in `{}` could be applied.", self.name)
     }
-    return parser_create(name, parse, skip, exec, nil,
-                         parsers = create_parser_array(context.allocator, skip, ..inputs))
+    return parser_create(name, parse, skip, exec, create_parser_array(context.allocator, skip, ..inputs))
 }
 
 seq :: proc(
@@ -211,8 +208,7 @@ seq :: proc(
         state_save_pos(state)
         return res, nil
     }
-    return parser_create(name, parse, skip, exec, nil,
-                         parsers = create_parser_array(context.allocator, skip, ..inputs))
+    return parser_create(name, parse, skip, exec, create_parser_array(context.allocator, skip, ..inputs))
 }
 
 star :: proc(
@@ -239,10 +235,9 @@ star :: proc(
         return nil, nil
     }
     if len(inputs) > 1 {
-        return parser_create(name, parse, skip, exec, parsers = []^Parser{seq(..inputs, skip = skip)})
+        return parser_create(name, parse, skip, exec, []^Parser{seq(..inputs, skip = skip)})
     }
-    return parser_create(name, parse, skip, exec, nil,
-                         parsers = create_parser_array(context.allocator, skip, ..inputs))
+    return parser_create(name, parse, skip, exec, create_parser_array(context.allocator, skip, ..inputs))
 }
 
 plus :: proc(
@@ -269,10 +264,9 @@ plus :: proc(
         return nil, parser_error(SyntaxError, state, "rule {%s}+ failed.", self.parsers[0].name)
     }
     if len(inputs) > 1 {
-        return parser_create(name, parse, skip, exec, parsers = []^Parser{seq(..inputs, skip = skip)})
+        return parser_create(name, parse, skip, exec, []^Parser{seq(..inputs, skip = skip)})
     }
-    return parser_create(name, parse, skip, exec, nil,
-                         parsers = create_parser_array(context.allocator, skip, ..inputs))
+    return parser_create(name, parse, skip, exec, create_parser_array(context.allocator, skip, ..inputs))
 }
 
 times :: proc(
@@ -303,10 +297,9 @@ times :: proc(
                                  self.parsers[0].name, nb_times, count)
     }
     if len(inputs) > 1 {
-        return parser_create(name, parse, skip, exec, parsers = []^Parser{seq(..inputs, skip = skip)})
+        return parser_create(name, parse, skip, exec, []^Parser{seq(..inputs, skip = skip)})
     }
-    return parser_create(name, parse, skip, exec, nil,
-                         parsers = create_parser_array(context.allocator, skip, ..inputs))
+    return parser_create(name, parse, skip, exec, create_parser_array(context.allocator, skip, ..inputs))
 }
 
 /*
@@ -339,10 +332,9 @@ combine :: proc(
         return res, nil
     }
     if len(inputs) > 1 {
-        return parser_create(name, parse, skip, exec, parsers = []^Parser{seq(..inputs, skip = skip)})
+        return parser_create(name, parse, skip, exec, []^Parser{seq(..inputs, skip = skip)})
     }
-    return parser_create(name, parse, skip, exec, nil,
-                         parsers = create_parser_array(context.allocator, skip, ..inputs))
+    return parser_create(name, parse, skip, exec, create_parser_array(context.allocator, skip, ..inputs))
 }
 
 rec :: proc(parser: ^Parser) -> ^Parser {
@@ -361,7 +353,7 @@ rec :: proc(parser: ^Parser) -> ^Parser {
         }
         return res, nil
     }
-    return parser_create("", parse, nil, nil, parsers = []^Parser{parser})
+    return parser_create("", parse, nil, nil, []^Parser{parser})
 }
 
 /*
@@ -452,6 +444,5 @@ lrec :: proc(
         }
         return res, nil
     }
-    return parser_create(name, parse, skip, exec, nil,
-                         parsers = create_parser_array(context.allocator, skip, ..inputs))
+    return parser_create(name, parse, skip, exec, create_parser_array(context.allocator, skip, ..inputs))
 }

@@ -11,17 +11,8 @@ Parser :: struct {
     parse: ParseProc,
     skip: SkipProc, // skip proc
     exec: ExecProc,
-    data: ParserData,
     parsers: [dynamic]^Parser,
 }
-
-ParserData :: union {
-    string,
-    rune,
-    rawptr,
-}
-
-// ParseResult :: ^ExecTreeNode
 
 ParseResult :: union {
     ^ExecTreeNode,
@@ -47,32 +38,31 @@ parser_allocator_destroy :: proc(allocator: ParserAllocator) {
     free(arena)
 }
 
-parser_create_from_dynamic_array :: proc(
+parser_create_from_dynamic_array_generic :: proc(
+    $T: typeid,
     name: string,
     parse: ParseProc,
     skip: SkipProc,
     exec: ExecProc,
-    data: ParserData,
     parsers: [dynamic]^Parser,
-) -> ^Parser {
-    parser := new(Parser)
+) -> ^T {
+    parser := new(T)
     parser.name = name
     parser.parse = parse
     parser.skip = skip
     parser.exec = exec
-    parser.data = data
     parser.parsers = parsers
     return parser
 }
 
-parser_create_from_slice :: proc(
+parser_create_from_slice_generic :: proc(
+    $T: typeid,
     name: string,
     parse: ParseProc,
     skip: SkipProc,
     exec: ExecProc,
-    data: ParserData = nil,
     parsers: []^Parser = nil,
-) -> ^Parser {
+) -> ^T {
     parser_array: [dynamic]^Parser
     if parsers != nil && len(parsers) > 0 {
         parser_array = make([dynamic]^Parser, len(parsers))
@@ -82,10 +72,32 @@ parser_create_from_slice :: proc(
             parser_array[idx] = sub_parser
         }
     }
-    return parser_create_from_dynamic_array(name, parse, skip, exec, data, parser_array)
+    return parser_create_from_dynamic_array_generic(T, name, parse, skip, exec, parser_array)
+}
+
+parser_create_from_dynamic_array :: proc(
+    name: string,
+    parse: ParseProc,
+    skip: SkipProc,
+    exec: ExecProc,
+    parsers: [dynamic]^Parser,
+) -> ^Parser {
+    return parser_create_from_dynamic_array_generic(Parser, name, parse, skip, exec, parsers)
+}
+
+parser_create_from_slice :: proc(
+    name: string,
+    parse: ParseProc,
+    skip: SkipProc,
+    exec: ExecProc,
+    parsers: []^Parser = nil,
+) -> ^Parser {
+    return parser_create_from_slice_generic(Parser, name, parse, skip, exec, parsers)
 }
 
 parser_create :: proc {
+    parser_create_from_dynamic_array_generic,
+    parser_create_from_slice_generic,
     parser_create_from_dynamic_array,
     parser_create_from_slice,
 }

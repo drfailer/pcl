@@ -71,22 +71,27 @@ range :: proc(
     return parser_create(name, parse, skip, exec)
 }
 
+LitCParser :: struct {
+    using parser: Parser,
+    char: rune,
+}
+
 lit_c :: proc(
     char: rune,
     skip: SkipProc = SKIP,
     exec: ExecProc = nil,
     name: string = "lit_c",
 ) -> ^Parser {
-    parse := proc(self: ^Parser, state: ^ParserState) -> (res: ParseResult, err: ParserError) {
-        char := self.data.(rune)
+    parse := proc(parser: ^Parser, state: ^ParserState) -> (res: ParseResult, err: ParserError) {
+        self := cast(^LitCParser)parser
         parser_skip(state, self.skip)
 
         if state_eof(state) {
             return nil, parser_error(SyntaxError, state, "{}: expected '{}', but eof was found.",
-                                     self.name, char)
+                                     self.name, self.char)
         }
 
-        if (state_char(state) == char) {
+        if (state_char(state) == self.char) {
             if ok := state_eat_one(state); !ok {
                 return nil, InternalError{"state_eat_one failed."}
             }
@@ -95,9 +100,16 @@ lit_c :: proc(
             return res, nil
         }
         return nil, parser_error(SyntaxError, state, "{}: expected '{}', but {} was found.",
-                                 self.name, char, state_char(state))
+                                 self.name, self.char, state_char(state))
     }
-    return parser_create(name, parse, skip, exec, data = char)
+    parser := parser_create(LitCParser, name, parse, skip, exec)
+    parser.char = char
+    return parser
+}
+
+LitStrParser :: struct {
+    using parser: Parser,
+    str: string,
 }
 
 lit_str :: proc(
@@ -106,12 +118,12 @@ lit_str :: proc(
     exec: ExecProc = nil,
     name: string = "lit",
 ) -> ^Parser {
-    parse := proc(self: ^Parser, state: ^ParserState) -> (res: ParseResult, err: ParserError) {
-        str := self.data.(string)
+    parse := proc(parser: ^Parser, state: ^ParserState) -> (res: ParseResult, err: ParserError) {
+        self := cast(^LitStrParser)parser
         parser_skip(state, self.skip)
-        for c in str {
+        for c in self.str {
             if state_eof(state) || state_char(state) != c {
-                return nil, parser_error(SyntaxError, state, "expected literal `{}`", str)
+                return nil, parser_error(SyntaxError, state, "expected literal `{}`", self.str)
             }
             if ok := state_eat_one(state); !ok {
                 return nil, InternalError{"state_eat_one failed."}
@@ -121,7 +133,9 @@ lit_str :: proc(
         state_save_pos(state)
         return res, nil
     }
-    return parser_create(name, parse, skip, exec, data = str)
+    parser := parser_create(LitStrParser, name, parse, skip, exec)
+    parser.str = str
+    return parser
 }
 
 lit :: proc { lit_c, lit_str }
@@ -307,8 +321,13 @@ block :: proc {
     block_str,
 }
 
+// line_stating_with ///////////////////////////////////////////////////////////
+
+// TODO: parse lines that start with a particular prefix (useful for plenty of tools)
+
 // separated items list ////////////////////////////////////////////////////////
 
+// TODO: it would be better to have multiple functions with default arguments
 separated_items :: proc(
     parser: ^Parser,
     $sep: rune,
