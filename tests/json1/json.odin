@@ -156,10 +156,17 @@ number_grammar :: proc() -> ^pcl.Parser {
     return or(floats, ints)
 }
 
-json_grammar :: proc() -> ^pcl.Parser {
+json_grammar :: proc(allocator: mem.Allocator) -> ^pcl.Parser {
     using pcl
 
+    // parser constructors use the context allocator
+    context.allocator = allocator
+
+    // skip
+
     pcl.SKIP = proc(char: rune) -> bool { return u8(char) == ' ' || u8(char) == '\n' }
+
+    //grammar definition
 
     json_object := declare(name = "object", exec = exec_object)
 
@@ -179,9 +186,10 @@ json_grammar :: proc() -> ^pcl.Parser {
 
 @(test)
 test_object :: proc(t: ^testing.T) {
-    pcl_handle := pcl.create()
-    defer pcl.destroy(pcl_handle)
-    json_parser := pcl_handle->make_grammar(json_grammar)
+    parser_arena: mem.Dynamic_Arena
+    mem.dynamic_arena_init(&parser_arena)
+    defer mem.dynamic_arena_destroy(&parser_arena)
+    json_parser := json_grammar(mem.dynamic_arena_allocator(&parser_arena))
 
     exec_arena_data: [16384]byte
     exec_arena: mem.Arena
@@ -231,9 +239,10 @@ test_object :: proc(t: ^testing.T) {
 }
 
 main :: proc() {
-    pcl_handle := pcl.create()
-    defer pcl.destroy(pcl_handle)
-    json_parser := pcl_handle->make_grammar(json_grammar)
+    parser_arena: mem.Dynamic_Arena
+    mem.dynamic_arena_init(&parser_arena)
+    defer mem.dynamic_arena_destroy(&parser_arena)
+    json_parser := json_grammar(mem.dynamic_arena_allocator(&parser_arena))
 
     exec_arena_data: [16384]byte
     exec_arena: mem.Arena

@@ -70,10 +70,18 @@ arithmetic_expr_grammar :: proc() -> ^pcl.Parser {
 Parse a test string:
 
 ```odin
-// initialize pcl
-pcl_handle := pcl.create()
-defer pcl.destroy(pcl_handle)
-parser := pcl_handle->make_grammar(arithmetic_expr_grammar)
+parser: ^pcl.Parser
+parser_arena: mem.Dynamic_Arena
+mem.dynamic_arena_init(&parser_arena)
+defer mem.dynamic_arena_destroy(&parser_arena)
+// For simplicity, the parser constructors use the context allocator, however,
+// pcl doesn't provide a parser_destroy function since parsers can be referenced
+// multiple times in the grammar tree. The user knows the grammar structure and
+// therefore is in charge of destroying the parsers himself.
+{
+    context.allocator = mem.dynamic_arena_allocator(&parser_arena)
+    parser = arithmetic_expr_grammar()
+}
 
 ctx: MyCustomContext
 

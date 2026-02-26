@@ -77,6 +77,7 @@ state_eat_one :: proc(state: ^ParserState) -> (ok: bool) {
     return true
 }
 
+// TODO: this function should be removed (use eat instead) and the char/char_at procs should return a Maybe
 state_advance :: proc(state: ^ParserState) {
     state.loc.col += 1
     state.cur += 1
