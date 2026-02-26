@@ -172,7 +172,7 @@ test_object :: proc(t: ^testing.T) {
         exec_allocator = exec_allocator,
     }
 
-    state, result, ok := pcl.parse_string(pcl_handle, json_parser, `{
+    str := `{
         "number": 4,
         "string": "Hellope",
         "empty_object": {},
@@ -181,7 +181,8 @@ test_object :: proc(t: ^testing.T) {
         },
         "empty_list": [],
         "list": [1, 2, 3, 4]
-    }`, &exec_data)
+    }`
+    state, result, ok := pcl.parse_string(pcl_handle, json_parser, &str, &exec_data)
     object := exec_data.value_stack[0].(JSON_Object)
 
     testing.expect(t, ok == true)
@@ -228,7 +229,7 @@ main :: proc() {
         exec_allocator = exec_allocator,
     }
 
-    state, result, ok := pcl.parse_string(pcl_handle, json_parser, `{
+    str := `{
         "number": 4,
         "string": "Hellope",
         "emtpy_object": {},
@@ -237,7 +238,8 @@ main :: proc() {
         },
         "empty_list": [],
         "list": [1, 2, 3, 4]
-    }`, &exec_data)
+    }`
+    state, result, ok := pcl.parse_string(pcl_handle, json_parser, &str, &exec_data)
     object := exec_data.value_stack[0]
     fmt.println(object)
 }

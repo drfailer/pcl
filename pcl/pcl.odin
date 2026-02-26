@@ -60,7 +60,7 @@ handle_grammar :: proc(pcl_handle: ^PCLHandle) -> ^Parser {
 parse_string :: proc(
     pcl_handle: ^PCLHandle,
     parser: ^Parser,
-    str: string,
+    str: ^string,
     user_data: rawptr = nil,
 ) -> (state: ParserState, res: ExecResult, ok: bool) {
     // set the user data
@@ -75,8 +75,7 @@ parse_string :: proc(
     defer pcl_handle.error_allocator = mem.Allocator{}
 
     // execute the given parser on the string and print error
-    str := str // TODO: stop copying the string
-    state = state_create(&str, pcl_handle)
+    state = state_create(str, pcl_handle)
     parse_result, err := parser_parse(&state, parser)
 
     // make sure there are no trailing skipable runes
@@ -106,3 +105,11 @@ parse_string :: proc(
     }
     return state, res, ok
 }
+
+// parse_string :: proc(
+//     pcl_handle: ^PCLHandle,
+//     parser: ^Parser,
+//     str: string,
+//     user_data: rawptr = nil,
+// ) -> (state: ParserState, res: ExecResult, ok: bool) {
+// }

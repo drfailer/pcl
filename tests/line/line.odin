@@ -22,10 +22,11 @@ doxygen :: proc(t: ^testing.T) {
         parser = pcl.star(pcl.line_starting_with("///"))
     }
 
-    state, result, ok := pcl.parse_string(pcl_handle, parser, `
+    str := `
         /// @brief test
         /// @param foo Foo param.
-        /// @return Value.`)
+        /// @return Value.`
+    state, result, ok := pcl.parse_string(pcl_handle, parser, &str)
 
     testing.expect(t, ok)
     testing.expect(t, len(result.([dynamic]pcl.ExecResult)) == 3)
