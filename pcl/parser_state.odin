@@ -75,6 +75,7 @@ state_save_pos :: proc(state: ^ParserState) {
 }
 
 state_char_at :: proc(state: ^ParserState, idx: int) -> rune {
+    assert(idx < len(state.content^)) // top level functions are expected to  check for this beforehand
     return utf8.rune_at_pos(state.content^, idx)
 }
 
@@ -83,8 +84,8 @@ state_char :: proc(state: ^ParserState) -> rune {
 }
 
 state_string_at :: proc(state: ^ParserState, begin: int, end: int) -> string {
-    // TODO: how to deal with an error here?
-    result, _ := strings.substring(state.content^, begin, end)
+    result, ok := strings.substring(state.content^, begin, end)
+    assert(ok)
     return result
 }
 
