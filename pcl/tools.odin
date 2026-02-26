@@ -57,7 +57,9 @@ memory_pool_destroy_impl :: proc(pool: ^MemoryPool($T), $debug: bool) {
         node = next
     }
     when debug {
-        log.info("the memory pool allocated", nb_nodes ,"elements, and ", nb_non_released_nodes," where released.")
+        if nb_nodes != nb_non_released_nodes {
+            log.info("the memory pool allocated", nb_nodes ,"elements, and ", nb_non_released_nodes," where released.")
+        }
     }
 }
 

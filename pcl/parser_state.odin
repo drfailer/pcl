@@ -21,31 +21,20 @@ RecursionData :: struct {
     top_nodes: map[^Parser]ParseResult,
 }
 
-GlobalParserState :: struct {
-    // TODO: error_stack: [dynamic]ParserError
-    rd: RecursionData,
-    branch_depth: u64,
-    error_allocator: mem.Allocator,
-    tree_allocator: mem.Allocator, // TODO: this should be a pool
-    exec_allocator: mem.Allocator,
-    exec_node_pool: MemoryPool(ExecTreeNode),
-    user_data: rawptr,
-}
-
 ParserState :: struct {
     content: ^string,
     pos: int,
     cur: int,
     loc: Location,
-    global_state: ^GlobalParserState,
+    pcl_handle: ^PCLHandle,
 }
 
 state_enter_branch :: proc(state: ^ParserState) {
-    state.global_state.branch_depth += 1
+    state.pcl_handle.branch_depth += 1
 }
 
 state_leave_branch :: proc(state: ^ParserState) {
-    state.global_state.branch_depth -= 1
+    state.pcl_handle.branch_depth -= 1
 }
 
 state_set :: proc(dest: ^ParserState, src: ^ParserState) {
@@ -53,13 +42,13 @@ state_set :: proc(dest: ^ParserState, src: ^ParserState) {
     dest.cur = src.cur
 }
 
-state_create :: proc(content: ^string, global_state: ^GlobalParserState) -> ParserState {
+state_create :: proc(content: ^string, pcl_handle: ^PCLHandle) -> ParserState {
     return ParserState{
         content = content,
         pos = 0,
         cur = 0,
         loc = Location{1, 1, ""},
-        global_state = global_state,
+        pcl_handle = pcl_handle,
     }
 }
 

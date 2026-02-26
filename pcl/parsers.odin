@@ -1,7 +1,12 @@
 package pcl
 
+// This file contains the built-in parsers. Note that those parser are meant to
+// be simple, the complex sub-grammar parsers should be added in the grammar
+// package.
+
 import "core:fmt"
 import "core:log"
+import "core:text/regex"
 
 // characters and string literals //////////////////////////////////////////////
 
@@ -321,9 +326,36 @@ block :: proc {
     block_str,
 }
 
-// line_stating_with ///////////////////////////////////////////////////////////
+// line stating with ///////////////////////////////////////////////////////////
 
-// TODO: parse lines that start with a particular prefix (useful for plenty of tools)
+line_starting_with :: proc(
+    start_parser: CombinatorInput,
+    skip: SkipProc = SKIP,
+    exec: ExecProc = nil,
+    name: string = "line_starting_with",
+) -> ^Parser {
+    parse := proc(self: ^Parser, state: ^ParserState) -> (res: ParseResult, err: ParserError) {
+        parser_skip(state, self.skip)
+        if self.parsers[0] != nil {
+            sub_state := state^
+            if res, err = parser_parse(&sub_state, self.parsers[0]); err != nil {
+                return nil, err
+            }
+            state_set(state, &sub_state)
+        }
+        for !state_eof(state) {
+            c := state_char(state)
+            state_eat_one(state)
+            if c == '\n' {
+                break;
+            }
+        }
+        res = parser_exec(state, self.exec) // TODO: the previous result is discarded
+        state_save_pos(state)
+        return res, nil
+    }
+    return parser_create(name, parse, skip, exec, create_parser_array(context.allocator, skip, start_parser))
+}
 
 // separated items list ////////////////////////////////////////////////////////
 
@@ -345,7 +377,7 @@ separated_items :: proc(
 ) -> ^Parser {
     parse := proc(parser: ^Parser, state: ^ParserState) -> (res: ParseResult, err: ParserError) {
         self := cast(^SeparatedItemsParser)parser
-        results := make([dynamic]ParseResult, allocator = state.global_state.tree_allocator)
+        results := make([dynamic]ParseResult, allocator = state.pcl_handle.tree_allocator)
         sub_state: ParserState
         trailing := false
 

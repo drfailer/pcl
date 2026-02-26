@@ -146,7 +146,7 @@ ParserError :: union {
 
 parser_error :: proc($error_type: typeid, state: ^ParserState, str: string, args: ..any) -> ParserError {
     return error_type{
-        fmt.aprintf(str, ..args, allocator = state.global_state.error_allocator)
+        fmt.aprintf(str, ..args, allocator = state.pcl_handle.error_allocator)
     }
 }
 
@@ -155,20 +155,20 @@ parser_error :: proc($error_type: typeid, state: ^ParserState, str: string, args
 parser_exec_with_childs :: proc(state: ^ParserState, exec: ExecProc, childs: [dynamic]ParseResult) -> ParseResult {
     pr: ParseResult
 
-    // fmt.printfln("rec depth = {}, branch depth = {}", state.global_state.rd.depth, state.global_state.branch_depth)
-    if state.global_state.rd.depth == 0 && state.global_state.branch_depth == 0 {
+    // fmt.printfln("rec depth = {}, branch depth = {}", state.pcl_handle.rd.depth, state.pcl_handle.branch_depth)
+    if state.pcl_handle.rd.depth == 0 && state.pcl_handle.branch_depth == 0 {
         if len(childs) == 0 {
             if exec == nil {
                 pr = cast(ExecResult)state_string(state)
             } else {
                 pr = exec(&ExecData{
                     content = []ExecResult{cast(ExecResult)state_string(state)},
-                    user_data = state.global_state.user_data,
-                    allocator = state.global_state.exec_allocator,
+                    user_data = state.pcl_handle.user_data,
+                    allocator = state.pcl_handle.exec_allocator,
                 })
             }
         } else {
-            childs_results := make([dynamic]ExecResult, allocator = state.global_state.exec_allocator)
+            childs_results := make([dynamic]ExecResult, allocator = state.pcl_handle.exec_allocator)
 
             for child in childs {
                 switch c in child {
@@ -176,9 +176,9 @@ parser_exec_with_childs :: proc(state: ^ParserState, exec: ExecProc, childs: [dy
                     if child != nil {
                         append(&childs_results, exec_tree_exec(
                                       c,
-                                      state.global_state.user_data,
-                                      state.global_state.exec_allocator,
-                                      &state.global_state.exec_node_pool,
+                                      state.pcl_handle.user_data,
+                                      state.pcl_handle.exec_allocator,
+                                      &state.pcl_handle.exec_node_pool,
                                       ))
                     }
                 case (ExecResult):
@@ -196,14 +196,14 @@ parser_exec_with_childs :: proc(state: ^ParserState, exec: ExecProc, childs: [dy
             } else {
                 pr = exec(&ExecData{
                     content = childs_results[:],
-                    user_data = state.global_state.user_data,
-                    allocator = state.global_state.exec_allocator,
+                    user_data = state.pcl_handle.user_data,
+                    allocator = state.pcl_handle.exec_allocator,
                 })
                 delete(childs_results)
             }
         }
     } else {
-        pr = memory_pool_allocate(&state.global_state.exec_node_pool)
+        pr = memory_pool_allocate(&state.pcl_handle.exec_node_pool)
         pr.(^ExecTreeNode).ctx = ExecContext{exec, state^}
         pr.(^ExecTreeNode).childs = childs
     }
@@ -211,7 +211,7 @@ parser_exec_with_childs :: proc(state: ^ParserState, exec: ExecProc, childs: [dy
 }
 
 parser_exec_with_child :: proc(state: ^ParserState, exec: ExecProc, result: ParseResult) -> ParseResult {
-    results := make([dynamic]ParseResult, allocator = state.global_state.tree_allocator)
+    results := make([dynamic]ParseResult, allocator = state.pcl_handle.tree_allocator)
     append(&results, result)
     return parser_exec_with_childs(state, exec, results)
 }

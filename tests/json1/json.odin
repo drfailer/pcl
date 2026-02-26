@@ -186,6 +186,8 @@ json_grammar :: proc(allocator: mem.Allocator) -> ^pcl.Parser {
 
 @(test)
 test_object :: proc(t: ^testing.T) {
+    pcl_handle := pcl.handle_create()
+    defer pcl.handle_destroy(pcl_handle)
     parser_arena: mem.Dynamic_Arena
     mem.dynamic_arena_init(&parser_arena)
     defer mem.dynamic_arena_destroy(&parser_arena)
@@ -199,7 +201,7 @@ test_object :: proc(t: ^testing.T) {
         exec_allocator = exec_allocator,
     }
 
-    state, result, ok := pcl.parse_string(json_parser, `{
+    state, result, ok := pcl.parse_string(pcl_handle, json_parser, `{
         "number": 4,
         "string": "Hellope",
         "empty_object": {},
@@ -239,6 +241,8 @@ test_object :: proc(t: ^testing.T) {
 }
 
 main :: proc() {
+    pcl_handle := pcl.handle_create()
+    defer pcl.handle_destroy(pcl_handle)
     parser_arena: mem.Dynamic_Arena
     mem.dynamic_arena_init(&parser_arena)
     defer mem.dynamic_arena_destroy(&parser_arena)
@@ -252,7 +256,7 @@ main :: proc() {
         exec_allocator = exec_allocator,
     }
 
-    state, result, ok := pcl.parse_string(json_parser, `{
+    state, result, ok := pcl.parse_string(pcl_handle, json_parser, `{
         "number": 4,
         "string": "Hellope",
         "emtpy_object": {},

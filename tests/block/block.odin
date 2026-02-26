@@ -10,6 +10,8 @@ skip :: proc(c: rune) -> bool {
 
 @(test)
 test_bracket :: proc(t: ^testing.T) {
+    pcl_handle := pcl.handle_create()
+    defer pcl.handle_destroy(pcl_handle)
     parser_allocator := pcl.parser_allocator_create()
     defer pcl.parser_allocator_destroy(parser_allocator)
     parser: ^pcl.Parser
@@ -20,7 +22,7 @@ test_bracket :: proc(t: ^testing.T) {
         parser = pcl.block('{', '}')
     }
 
-    state, result, ok := pcl.parse_string(parser, `
+    state, result, ok := pcl.parse_string(pcl_handle, parser, `
         {
             printf("}\n");
         }`)
@@ -33,6 +35,8 @@ test_bracket :: proc(t: ^testing.T) {
 
 @(test)
 test_quotes :: proc(t: ^testing.T) {
+    pcl_handle := pcl.handle_create()
+    defer pcl.handle_destroy(pcl_handle)
     parser_allocator := pcl.parser_allocator_create()
     defer pcl.parser_allocator_destroy(parser_allocator)
     parser: ^pcl.Parser
@@ -43,13 +47,15 @@ test_quotes :: proc(t: ^testing.T) {
         parser = pcl.block('"', '"')
     }
 
-    state, result, ok := pcl.parse_string(parser, `" printf(\"\"); "`)
+    state, result, ok := pcl.parse_string(pcl_handle, parser, `" printf(\"\"); "`)
 
     testing.expect(t, ok)
     testing.expect(t, result.(string) == ` printf(\"\"); `)
 }
 
 print_bracket :: proc() {
+    pcl_handle := pcl.handle_create()
+    defer pcl.handle_destroy(pcl_handle)
     parser_allocator := pcl.parser_allocator_create()
     defer pcl.parser_allocator_destroy(parser_allocator)
     parser: ^pcl.Parser
@@ -60,7 +66,7 @@ print_bracket :: proc() {
         parser = pcl.block('{', '}')
     }
 
-    state, result, ok := pcl.parse_string(parser, `
+    state, result, ok := pcl.parse_string(pcl_handle, parser, `
         {
             printf("}\n");
         }`)
@@ -69,6 +75,8 @@ print_bracket :: proc() {
 }
 
 print_quotes :: proc() {
+    pcl_handle := pcl.handle_create()
+    defer pcl.handle_destroy(pcl_handle)
     parser_allocator := pcl.parser_allocator_create()
     defer pcl.parser_allocator_destroy(parser_allocator)
     parser: ^pcl.Parser
@@ -79,7 +87,7 @@ print_quotes :: proc() {
         parser = pcl.block('"', '"')
     }
 
-    state, result, ok := pcl.parse_string(parser, `" printf(\"\"); "`)
+    state, result, ok := pcl.parse_string(pcl_handle, parser, `" printf(\"\"); "`)
 
     fmt.printfln("result = {}", result)
 }

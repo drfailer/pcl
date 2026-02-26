@@ -13,7 +13,7 @@ CombinatorInput :: union {
     rune,
 }
 
-@(private="file")
+@(private="package")
 create_parser_array :: proc(allocator: mem.Allocator, skip: SkipProc, inputs: ..CombinatorInput) -> [dynamic]^Parser {
     array := make([dynamic]^Parser, allocator = allocator)
 
@@ -130,7 +130,7 @@ opt :: proc(
             }
             return nil, nil
         }
-        free_all(state.global_state.error_allocator)
+        free_all(state.pcl_handle.error_allocator)
         state_set(state, &sub_state)
         res = parser_exec(state, self.exec, res)
         state_save_pos(state)
@@ -169,9 +169,9 @@ or :: proc(
             // in this case, we free all the nodes allocated by the failed parser
             // FIXME: this doesn't work because when a parser fails, it does not return his result
             #partial switch sr in sub_res {
-            case (^ExecTreeNode): memory_pool_release_from_root(&state.global_state.exec_node_pool, sr)
+            case (^ExecTreeNode): memory_pool_release_from_root(&state.pcl_handle.exec_node_pool, sr)
             }
-            free_all(state.global_state.error_allocator)
+            free_all(state.pcl_handle.error_allocator)
         }
         return nil, parser_error(SyntaxError, state, "none of the rules in `{}` could be applied.", self.name)
     }
@@ -185,7 +185,7 @@ seq :: proc(
     name: string = "seq",
 ) -> ^Parser {
     parse := proc(self: ^Parser, state: ^ParserState) -> (res: ParseResult, err: ParserError) {
-        results := make([dynamic]ParseResult, allocator = state.global_state.tree_allocator)
+        results := make([dynamic]ParseResult, allocator = state.pcl_handle.tree_allocator)
         sub_state := state^
         sub_res: ParseResult
 
@@ -218,7 +218,7 @@ star :: proc(
     name: string = "star",
 ) -> ^Parser {
     parse := proc(self: ^Parser, state: ^ParserState) -> (res: ParseResult, err: ParserError) {
-        results := make([dynamic]ParseResult, allocator = state.global_state.tree_allocator)
+        results := make([dynamic]ParseResult, allocator = state.pcl_handle.tree_allocator)
 
         parser_skip(state, self.skip)
         sub_state := state^
@@ -247,7 +247,7 @@ plus :: proc(
     name: string = "plus",
 ) -> ^Parser {
     parse := proc(self: ^Parser, state: ^ParserState) -> (res: ParseResult, err: ParserError) {
-        results := make([dynamic]ParseResult, allocator = state.global_state.tree_allocator)
+        results := make([dynamic]ParseResult, allocator = state.pcl_handle.tree_allocator)
 
         parser_skip(state, self.skip)
         sub_state := state^
@@ -277,7 +277,7 @@ times :: proc(
     name: string = "times",
 ) -> ^Parser {
     parse := proc(self: ^Parser, state: ^ParserState) -> (res: ParseResult, err: ParserError) {
-        results := make([dynamic]ParseResult, allocator = state.global_state.tree_allocator)
+        results := make([dynamic]ParseResult, allocator = state.pcl_handle.tree_allocator)
         count := 0
 
         parser_skip(state, self.skip)
@@ -341,11 +341,11 @@ rec :: proc(parser: ^Parser) -> ^Parser {
     parse := proc(self: ^Parser, state: ^ParserState) -> (res: ParseResult, err: ParserError) {
         recursive_rule := self.parsers[0]
 
-        old_top_nodes := state.global_state.rd.top_nodes
-        state.global_state.rd.top_nodes = make(map[^Parser]ParseResult)
+        old_top_nodes := state.pcl_handle.rd.top_nodes
+        state.pcl_handle.rd.top_nodes = make(map[^Parser]ParseResult)
         defer {
-            delete(state.global_state.rd.top_nodes)
-            state.global_state.rd.top_nodes = old_top_nodes
+            delete(state.pcl_handle.rd.top_nodes)
+            state.pcl_handle.rd.top_nodes = old_top_nodes
         }
 
         if res, err = parser_parse(state, self.parsers[0]); err != nil {
@@ -389,7 +389,7 @@ lrec :: proc(
         terminal_rule := self.parsers[len(self.parsers) - 1]
         middle_rules := self.parsers[1:len(self.parsers) - 1]
 
-        state.global_state.rd.depth += 1
+        state.pcl_handle.rd.depth += 1
 
         // apply terminal rule
         parser_skip(state, self.skip)
@@ -397,21 +397,21 @@ lrec :: proc(
             return nil, err
         }
 
-        if recursive_rule in state.global_state.rd.top_nodes {
-            state.global_state.rd.top_nodes[recursive_rule].(^ExecTreeNode).childs[len(self.parsers) - 1] = res
-            state.global_state.rd.top_nodes[recursive_rule].(^ExecTreeNode).ctx.state.cur = state.pos
-            res = state.global_state.rd.top_nodes[recursive_rule]
+        if recursive_rule in state.pcl_handle.rd.top_nodes {
+            state.pcl_handle.rd.top_nodes[recursive_rule].(^ExecTreeNode).childs[len(self.parsers) - 1] = res
+            state.pcl_handle.rd.top_nodes[recursive_rule].(^ExecTreeNode).ctx.state.cur = state.pos
+            res = state.pcl_handle.rd.top_nodes[recursive_rule]
         }
 
         // success if eof and no operator
         parser_skip(state, self.skip)
         if state_eof(state) && len(middle_rules) == 0 {
-            delete_key(&state.global_state.rd.top_nodes, recursive_rule)
+            delete_key(&state.pcl_handle.rd.top_nodes, recursive_rule)
             return res, nil
         }
 
 
-        childs := make([dynamic]ParseResult, len(self.parsers), allocator = state.global_state.tree_allocator)
+        childs := make([dynamic]ParseResult, len(self.parsers), allocator = state.pcl_handle.tree_allocator)
         childs[0] = res
 
         // apply middle rules
@@ -426,21 +426,21 @@ lrec :: proc(
         parser_skip(state, self.skip)
         res = parser_exec(state, self.exec, childs)
         res.(^ExecTreeNode).ctx.state.pos = childs[0].(^ExecTreeNode).ctx.state.pos
-        state.global_state.rd.top_nodes[recursive_rule] = res
+        state.pcl_handle.rd.top_nodes[recursive_rule] = res
 
         // apply recursive rule
         if res, err = parser_parse(state, recursive_rule); err != nil {
             return nil, err
         }
 
-        state.global_state.rd.depth -= 1
-        if recursive_rule in state.global_state.rd.top_nodes {
-            res = state.global_state.rd.top_nodes[recursive_rule]
-            delete_key(&state.global_state.rd.top_nodes, recursive_rule)
+        state.pcl_handle.rd.depth -= 1
+        if recursive_rule in state.pcl_handle.rd.top_nodes {
+            res = state.pcl_handle.rd.top_nodes[recursive_rule]
+            delete_key(&state.pcl_handle.rd.top_nodes, recursive_rule)
         }
 
-        if state.global_state.rd.depth == 0 {
-            clear(&state.global_state.rd.top_nodes)
+        if state.pcl_handle.rd.depth == 0 {
+            clear(&state.pcl_handle.rd.top_nodes)
         }
         return res, nil
     }

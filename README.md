@@ -70,6 +70,8 @@ arithmetic_expr_grammar :: proc() -> ^pcl.Parser {
 Parse a test string:
 
 ```odin
+pcl_handle := pcl.handle_create()
+defer pcl.handle_destroy(pcl_handle)
 parser: ^pcl.Parser
 parser_arena: mem.Dynamic_Arena
 mem.dynamic_arena_init(&parser_arena)
@@ -86,7 +88,7 @@ defer mem.dynamic_arena_destroy(&parser_arena)
 ctx: MyCustomContext
 
 // parse a string
-state, res, ok = pcl.parse_string(parser, "sin(1 - (2 + 3*12.4)) - 3*3 - cos(3*4) + 4/2 + (2 + 2)", &ctx)
+state, res, ok = pcl.parse_string(pcl_handle, parser, "sin(1 - (2 + 3*12.4)) - 3*3 - cos(3*4) + 4/2 + (2 + 2)", &ctx)
 ```
 
 ## The `exec` functions
