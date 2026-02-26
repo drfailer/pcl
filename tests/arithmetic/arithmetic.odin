@@ -1,3 +1,4 @@
+#+feature using-stmt
 package artihmetic
 
 import "pcl:pcl"
@@ -202,7 +203,6 @@ skip_spaces :: proc(char: rune) -> bool {
 // <factor> := <number> | <parent>
 arithmetic_grammar :: proc(allocator: pcl.ParserAllocator) -> ^pcl.Parser {
     using pcl
-
     context.allocator = allocator
 
     pcl.SKIP = skip_spaces
