@@ -120,13 +120,10 @@ parser_skip :: proc(state: ^ParserState, parser_skip: SkipProc) {
         return
     }
     state := state
-    for state.cur < len(state.content) && parser_skip(state_char(state)) {
-        if state_char(state) == '\n' {
-            state.loc.row += 1
-            state.loc.col = 1
-        }
-        state_advance(state)
+    for parser_skip(state_char(state)) {
+        state_eat_one(state) or_break
     }
+    state_save_pos(state)
 }
 
 // errors //////////////////////////////////////////////////////////////////////
