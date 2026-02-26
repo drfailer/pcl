@@ -2,6 +2,7 @@ package pcl
 
 import "core:mem"
 import "core:fmt"
+import "core:os"
 
 PCLHandle :: struct {
     // TODO: error_stack: [dynamic]ParserError
@@ -106,10 +107,23 @@ parse_string :: proc(
     return state, res, ok
 }
 
-// parse_string :: proc(
-//     pcl_handle: ^PCLHandle,
-//     parser: ^Parser,
-//     str: string,
-//     user_data: rawptr = nil,
-// ) -> (state: ParserState, res: ExecResult, ok: bool) {
-// }
+// Since the parser can generate tokens that contain substrings that are just
+// slices of the whole parsed string, the lifetime of the file content should
+// be extended to the outer scope of this function.
+parse_file :: proc(
+    pcl_handle: ^PCLHandle,
+    parser: ^Parser,
+    filepath: string,
+    user_data: rawptr = nil,
+    allocator := context.allocator, // we need to create the string
+) -> (filecontent: string, state: ParserState, res: ExecResult, ok: bool) {
+    data: []u8
+	data, ok = os.read_entire_file(filepath, allocator)
+	if !ok {
+		// could not read file
+		return
+	}
+    filecontent = string(data)
+    state, res, ok = parse_string(pcl_handle, parser, &filecontent, user_data)
+    return filecontent, state, res, ok
+}
