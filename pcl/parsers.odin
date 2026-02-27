@@ -408,7 +408,7 @@ separated_items :: proc(
             return nil, parser_error(SyntaxError, state, "no items found in `{}({})`.",
                                      self.name, self.separator)
         }
-        res = parser_exec(state, self.exec, results)
+        res = parser_exec(state, self.exec, results, flags = {.ListResult})
         state_save_pos(state)
         return res, nil
     }

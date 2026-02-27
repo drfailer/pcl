@@ -1,6 +1,7 @@
 package pcl
 
 import "core:mem"
+import "core:fmt"
 import "base:intrinsics"
 
 /*
@@ -69,7 +70,12 @@ exec_tree_node_exec :: proc(node: ^ExecTreeNode, exec_data: ^ExecData) -> ExecRe
 
     if len(node.childs) == 0 {
         if node.ctx.exec == nil {
-            return state_string(&node.ctx.state)
+            if .ListResult not_in node.flags {
+                return state_string(&node.ctx.state)
+            } else {
+                empty_resutls := make([dynamic]ExecResult, allocator = exec_data.allocator)
+                return empty_resutls
+            }
         }
         exec_data.content = []ExecResult{state_string(&node.ctx.state)}
     } else {

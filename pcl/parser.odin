@@ -161,7 +161,11 @@ parser_exec_with_childs :: proc(
     if state.pcl_handle.rd.depth == 0 && state.pcl_handle.branch_depth == 0 {
         if len(childs) == 0 {
             if exec == nil {
-                pr = cast(ExecResult)state_string(state)
+                if .ListResult not_in flags {
+                    pr = cast(ExecResult)state_string(state)
+                } else {
+                    pr = cast(ExecResult)make([dynamic]ExecResult, allocator = state.pcl_handle.exec_allocator)
+                }
             } else {
                 pr = exec(&ExecData{
                     content = []ExecResult{cast(ExecResult)state_string(state)},
