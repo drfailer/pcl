@@ -109,6 +109,22 @@ single :: proc(
     return parser_create(name, parse, skip, exec, create_parser_array(context.allocator, skip, input))
 }
 
+not :: proc(
+    input: CombinatorInput,
+    skip: SkipProc = SKIP,
+    name: string = "not",
+) -> ^Parser {
+    parse := proc(self: ^Parser, state: ^ParserState) -> (res: ParseResult, err: ParserError) {
+        parser_skip(state, self.skip)
+        sub_state := state^
+        if res, err = parser_parse(&sub_state, self.parsers[0]); err == nil {
+            return nil, SyntaxError{""}
+        }
+        return nil, nil
+    }
+    return parser_create(name, parse, skip, nil, create_parser_array(context.allocator, skip, input))
+}
+
 opt :: proc(
     input: CombinatorInput,
     skip: SkipProc = SKIP,
