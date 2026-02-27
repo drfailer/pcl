@@ -123,6 +123,9 @@ content_cast_value :: proc($T: typeid, ptr: rawptr) -> T {
 }
 
 content_value_from_result :: proc(result: ExecResult, $T: typeid, indexes: ..int) -> T {
+    if len(indexes) == 0 {
+        return content_cast_value(T, result.(rawptr))
+    }
     content := result.([dynamic]ExecResult)[indexes[0]]
     for idx in indexes[1:] {
         content = content.([dynamic]ExecResult)[idx]
@@ -131,13 +134,16 @@ content_value_from_result :: proc(result: ExecResult, $T: typeid, indexes: ..int
 }
 
 content_value_from_data :: proc(data: ^ExecData, $T: typeid, indexes: ..int) -> T {
-    if len(indexes) == 1 {
-        return content_cast_value(T, data.content[indexes[0]].(rawptr))
+    if len(indexes) == 0 {
+        return content_cast_value(T, data.content[0].(rawptr))
     }
     return content_value_from_result(data.content[indexes[0]], T, ..indexes[1:])
 }
 
 content_string_from_result :: proc(result: ExecResult, indexes: ..int) -> string {
+    if len(indexes) == 0 {
+        return result.(string)
+    }
     content := result.([dynamic]ExecResult)[indexes[0]]
     for idx in indexes[1:] {
         content = content.([dynamic]ExecResult)[idx]
@@ -146,8 +152,8 @@ content_string_from_result :: proc(result: ExecResult, indexes: ..int) -> string
 }
 
 content_string_from_data :: proc(data: ^ExecData, indexes: ..int) -> string {
-    if len(indexes) == 1 {
-        return data.content[indexes[0]].(string)
+    if len(indexes) == 0 {
+        return data.content[0].(string)
     }
     return content_string_from_result(data.content[indexes[0]], ..indexes[1:])
 }
@@ -159,20 +165,26 @@ content :: proc {
     content_string_from_data,
 }
 
-contents_from_data :: proc(data: ^ExecData, indexes: ..int) -> [dynamic]ExecResult {
+contents_from_data :: proc(data: ^ExecData, indexes: ..int) -> []ExecResult {
+    if len(indexes) == 0 {
+        return data.content
+    }
     content := data.content[indexes[0]]
     for idx in indexes[1:] {
         content = content.([dynamic]ExecResult)[idx]
     }
-    return content.([dynamic]ExecResult)
+    return content.([dynamic]ExecResult)[:]
 }
 
-contents_from_result :: proc(result: ExecResult, indexes: ..int) -> [dynamic]ExecResult {
+contents_from_result :: proc(result: ExecResult, indexes: ..int) -> []ExecResult {
+    if len(indexes) == 0 {
+        return result.([dynamic]ExecResult)[:]
+    }
     content := result.([dynamic]ExecResult)[indexes[0]]
     for idx in indexes[1:] {
         content = content.([dynamic]ExecResult)[idx]
     }
-    return content.([dynamic]ExecResult)
+    return content.([dynamic]ExecResult)[:]
 }
 
 contents :: proc {
