@@ -168,27 +168,20 @@ content :: proc {
     content_string_from_data,
 }
 
-contents_from_data :: proc(data: ^ExecData, indexes: ..int) -> []ExecResult {
-    if len(indexes) == 0 {
-        return data.content
-    }
-    content := data.content[indexes[0]]
-    for idx in indexes[1:] {
-        content = content.([dynamic]ExecResult)[idx]
-    }
-    return content.([dynamic]ExecResult)[:]
-}
-
 contents_from_result :: proc(result: ExecResult, indexes: ..int) -> []ExecResult {
     if len(indexes) == 0 {
         return result.([dynamic]ExecResult)[:]
     }
-    content := result.([dynamic]ExecResult)[indexes[0]]
-    for idx in indexes[1:] {
-        content = content.([dynamic]ExecResult)[idx]
-    }
-    return content.([dynamic]ExecResult)[:]
+    return contents_from_result(result.([dynamic]ExecResult)[indexes[0]], ..indexes[1:])
 }
+
+contents_from_data :: proc(data: ^ExecData, indexes: ..int) -> []ExecResult {
+    if len(indexes) == 0 {
+        return data.content
+    }
+    return contents_from_result(data.content[indexes[0]], ..indexes[1:])
+}
+
 
 contents :: proc {
     contents_from_data,
