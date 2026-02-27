@@ -33,6 +33,30 @@ apply_predicate :: proc(
     return nil, error(self, state)
 }
 
+PredicateParser :: struct {
+    using parser: Parser,
+    predicate: proc(c: rune) -> bool,
+}
+
+pred :: proc(
+    pred: proc(c: rune) -> bool,
+    skip: SkipProc = SKIP,
+    exec: ExecProc = nil,
+    name: string = "pred",
+) -> ^Parser {
+    parse := proc(parser: ^Parser, state: ^ParserState) -> (res: ParseResult, err: ParserError) {
+        self := cast(^PredicateParser)parser
+        return apply_predicate(self, state, self.predicate,
+            proc(parser: ^Parser, state: ^ParserState) -> ParserError {
+                return parser_error(SyntaxError, state, "{}: predicate failed", parser.name)
+            },
+        )
+    }
+    parser := parser_create(PredicateParser, name, parse, skip, exec)
+    parser.predicate = pred
+    return parser
+}
+
 one_of :: proc(
     $chars: string,
     skip: SkipProc = SKIP,
@@ -44,7 +68,7 @@ one_of :: proc(
             self,
             state,
             proc(c: rune) -> bool {
-                return strings.contains_rune(chars, rune(c))
+                return strings.contains_rune(chars, c)
             },
             proc(parser: ^Parser, state: ^ParserState) -> ParserError {
                 return parser_error(SyntaxError, state, "{}: expected one of [{}]", parser.name, chars)
