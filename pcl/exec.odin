@@ -23,6 +23,7 @@ ExecContext :: struct {
 ExecResult :: union {
     string,              // sub-string of the state
     rawptr,              // user pointer
+    uint,                // register value
     [dynamic]ExecResult, // multiple results
 }
 
@@ -114,28 +115,30 @@ user_data :: proc(data: ^ExecData, $T: typeid) -> T {
     return cast(T)data.user_data
 }
 
-content_cast_value :: proc($T: typeid, ptr: rawptr) -> T {
+content_cast_value :: proc($T: typeid, result: ExecResult) -> T {
     when intrinsics.type_is_pointer(T) {
-        return cast(T)ptr
+        return cast(T)result.(rawptr)
+    } else when size_of(T) <= size_of(uint) {
+        return transmute(T)result.(uint)
     } else {
-        return (cast(^T)ptr)^
+        return (cast(^T)result.(rawptr))^
     }
 }
 
 content_value_from_result :: proc(result: ExecResult, $T: typeid, indexes: ..int) -> T {
     if len(indexes) == 0 {
-        return content_cast_value(T, result.(rawptr))
+        return content_cast_value(T, result)
     }
     content := result.([dynamic]ExecResult)[indexes[0]]
     for idx in indexes[1:] {
         content = content.([dynamic]ExecResult)[idx]
     }
-    return content_cast_value(T, content.(rawptr))
+    return content_cast_value(T, content)
 }
 
 content_value_from_data :: proc(data: ^ExecData, $T: typeid, indexes: ..int) -> T {
     if len(indexes) == 0 {
-        return content_cast_value(T, data.content[0].(rawptr))
+        return content_cast_value(T, data.content[0])
     }
     return content_value_from_result(data.content[indexes[0]], T, ..indexes[1:])
 }
@@ -195,6 +198,8 @@ contents :: proc {
 result :: proc(data: ^ExecData, value: $T) -> ExecResult {
     when intrinsics.type_is_pointer(T) {
         return cast(rawptr)value
+    } else when size_of(T) <= size_of(uint) {
+        return transmute(uint)value
     } else {
         copy := new(T, allocator = data.allocator) // TODO: this allocator is for the nodes, we need a temporary allocator here and we need to be able to free the data
         copy^ = value
