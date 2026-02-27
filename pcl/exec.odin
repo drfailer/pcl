@@ -173,18 +173,25 @@ content :: proc {
     content_string_from_data,
 }
 
-contents_from_result :: proc(result: ExecResult, indexes: ..int) -> []ExecResult {
+contents_from_result :: proc(result: ExecResult, indexes: ..int) -> ([]ExecResult, bool) {
     if len(indexes) == 0 {
-        return result.([dynamic]ExecResult)[:]
+        #partial switch r in result {
+        case ([dynamic]ExecResult): return r[:], true
+        case: return nil, false
+        }
     }
     return contents_from_result(result.([dynamic]ExecResult)[indexes[0]], ..indexes[1:])
 }
 
-contents_from_data :: proc(data: ^ExecData, indexes: ..int) -> []ExecResult {
+contents_from_data :: proc(data: ^ExecData, indexes: ..int, loc := #caller_location) -> []ExecResult {
     if len(indexes) == 0 {
         return data.content
     }
-    return contents_from_result(data.content[indexes[0]], ..indexes[1:])
+    results, ok := contents_from_result(data.content[indexes[0]], ..indexes[1:])
+    if !ok {
+        fmt.println(loc, "`contents` used on an non array content.")
+    }
+    return results
 }
 
 
