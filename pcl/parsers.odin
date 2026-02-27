@@ -336,7 +336,7 @@ line_starting_with :: proc(
 ) -> ^Parser {
     parse := proc(self: ^Parser, state: ^ParserState) -> (res: ParseResult, err: ParserError) {
         parser_skip(state, self.skip)
-        if self.parsers[0] != nil {
+        if len(self.parsers) > 0 && self.parsers[0] != nil {
             sub_state := state^
             if res, err = parser_parse(&sub_state, self.parsers[0]); err != nil {
                 return nil, err
