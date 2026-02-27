@@ -135,15 +135,6 @@ opt :: proc(
         parser_skip(state, self.skip)
         sub_state := state^
         if res, err = parser_parse(&sub_state, self.parsers[0]); err != nil {
-            // ISSUE: this allow to transmit error message when the optional
-            //        parser failed but did consume a part of the string (in
-            //        this case, the content was there, but contained an error).
-            //        However, this will not work if the `skip` of the sub-rule
-            //        is different than the skip of this rule.
-            if (self.parsers[0].skip == nil || self.parsers[0].skip == self.skip) && sub_state.cur > state.cur {
-                state_set(state, &sub_state)
-                return nil, err
-            }
             return nil, nil
         }
         free_all(state.pcl_handle.error_allocator)
