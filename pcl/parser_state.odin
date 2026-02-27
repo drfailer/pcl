@@ -95,7 +95,11 @@ state_string :: proc(state: ^ParserState) -> string {
 
 @(private="file")
 find_line_start :: proc(state: ^ParserState) -> int {
-    return state.cur - (state.loc.col - 2)
+    idx := state.cur - (state.loc.col - 1)
+    if state.content[idx] == '\n' {
+        idx += 1
+    }
+    return idx
 }
 
 @(private="file")
