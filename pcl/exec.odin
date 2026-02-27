@@ -10,8 +10,13 @@ import "base:intrinsics"
  * parser is in a branch or a left recursive rule.
  */
 
+ExecFlag :: enum {
+    ListResult,
+}
+
 ExecTreeNode :: struct {
     ctx: ExecContext,
+    flags: bit_set[ExecFlag],
     childs: [dynamic]ParseResult,
 }
 
@@ -82,7 +87,7 @@ exec_tree_node_exec :: proc(node: ^ExecTreeNode, exec_data: ^ExecData) -> ExecRe
         }
 
         if node.ctx.exec == nil {
-            if len(childs_results) == 1 {
+            if .ListResult not_in node.flags && len(childs_results) == 1 {
                 result := childs_results[0]
                 delete(childs_results)
                 return result

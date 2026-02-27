@@ -244,7 +244,7 @@ star :: proc(
             state_set(state, &sub_state)
         }
         if state.cur > state.pos {
-            res = parser_exec(state, self.exec, results)
+            res = parser_exec(state, self.exec, results, flags = {.ListResult})
             state_save_pos(state)
             return res, nil
         }
@@ -273,7 +273,7 @@ plus :: proc(
             state_set(state, &sub_state)
         }
         if state.cur > state.pos {
-            res = parser_exec(state, self.exec, results)
+            res = parser_exec(state, self.exec, results, flags = {.ListResult})
             state_save_pos(state)
             return res, nil
         }
@@ -305,7 +305,7 @@ times :: proc(
             count += 1
         }
         if count == nb_times {
-            res = parser_exec(state, self.exec, results)
+            res = parser_exec(state, self.exec, results, flags = {.ListResult})
             state_save_pos(state)
             return res, nil
         }

@@ -149,7 +149,12 @@ parser_error :: proc($error_type: typeid, state: ^ParserState, str: string, args
 
 // exec tree functions /////////////////////////////////////////////////////////
 
-parser_exec_with_childs :: proc(state: ^ParserState, exec: ExecProc, childs: [dynamic]ParseResult) -> ParseResult {
+parser_exec_with_childs :: proc(
+    state: ^ParserState,
+    exec: ExecProc,
+    childs: [dynamic]ParseResult,
+    flags: bit_set[ExecFlag] = {},
+) -> ParseResult {
     pr: ParseResult
 
     // fmt.printfln("rec depth = {}, branch depth = {}", state.pcl_handle.rd.depth, state.pcl_handle.branch_depth)
@@ -184,7 +189,7 @@ parser_exec_with_childs :: proc(state: ^ParserState, exec: ExecProc, childs: [dy
             }
 
             if exec == nil {
-                if len(childs_results) == 1 {
+                if .ListResult not_in flags && len(childs_results) == 1 {
                     pr = childs_results[0]
                     delete(childs_results)
                 } else {
@@ -202,19 +207,20 @@ parser_exec_with_childs :: proc(state: ^ParserState, exec: ExecProc, childs: [dy
     } else {
         pr = memory_pool_allocate(&state.pcl_handle.exec_node_pool)
         pr.(^ExecTreeNode).ctx = ExecContext{exec, state^}
+        pr.(^ExecTreeNode).flags = flags
         pr.(^ExecTreeNode).childs = childs
     }
     return pr
 }
 
-parser_exec_with_child :: proc(state: ^ParserState, exec: ExecProc, result: ParseResult) -> ParseResult {
+parser_exec_with_child :: proc(state: ^ParserState, exec: ExecProc, result: ParseResult, flags: bit_set[ExecFlag] = {}) -> ParseResult {
     results := make([dynamic]ParseResult, allocator = state.pcl_handle.tree_allocator)
     append(&results, result)
-    return parser_exec_with_childs(state, exec, results)
+    return parser_exec_with_childs(state, exec, results, flags)
 }
 
-parser_exec_no_child :: proc(state: ^ParserState, exec: ExecProc) -> ParseResult {
-    return parser_exec_with_childs(state, exec, [dynamic]ParseResult{})
+parser_exec_no_child :: proc(state: ^ParserState, exec: ExecProc, flags: bit_set[ExecFlag] = {}) -> ParseResult {
+    return parser_exec_with_childs(state, exec, [dynamic]ParseResult{}, flags)
 }
 
 parser_exec :: proc {
