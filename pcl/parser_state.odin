@@ -84,6 +84,9 @@ state_char :: proc(state: ^ParserState) -> rune {
 }
 
 state_string_at :: proc(state: ^ParserState, begin: int, end: int) -> string {
+    if begin == end {
+        return ""
+    }
     result, ok := strings.substring(state.content^, begin, end)
     assert(ok)
     return result
