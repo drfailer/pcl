@@ -235,18 +235,22 @@ block_char :: proc(
             }
 
             switch state_char(state) {
-            case '(', ')':
-                opening_char = '('
-                closing_char = ')'
-            case '{', '}':
-                opening_char = '{'
-                closing_char = '}'
-            case '[', ']':
-                opening_char = '['
-                closing_char = ']'
-            case '<', '>':
-                opening_char = '<'
-                closing_char = '>'
+            // we can image use one of these symbols to write strings in a
+            // weird syntax, however, some of these may appear alone on
+            // conventional syntaxes (especially '<' and '>'), therefore, we
+            // will not test for these symbols
+            // case '(', ')':
+            //     opening_char = '('
+            //     closing_char = ')'
+            // case '{', '}':
+            //     opening_char = '{'
+            //     closing_char = '}'
+            // case '[', ']':
+            //     opening_char = '['
+            //     closing_char = ']'
+            // case '<', '>':
+            //     opening_char = '<'
+            //     closing_char = '>'
             case '"':
                 opening_char = '"'
                 closing_char = '"'
