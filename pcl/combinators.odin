@@ -243,12 +243,9 @@ star :: proc(
             append(&results, sub_res)
             state_set(state, &sub_state)
         }
-        if state.cur > state.pos {
-            res = parser_exec(state, self.exec, results, flags = {.ListResult})
-            state_save_pos(state)
-            return res, nil
-        }
-        return nil, nil
+        res = parser_exec(state, self.exec, results, flags = {.ListResult})
+        state_save_pos(state)
+        return res, nil
     }
     if len(inputs) > 1 {
         return parser_create(name, parse, skip, exec, []^Parser{seq(..inputs, skip = skip)})
