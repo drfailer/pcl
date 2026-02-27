@@ -76,7 +76,9 @@ state_save_pos :: proc(state: ^ParserState) {
 
 state_char_at :: proc(state: ^ParserState, idx: int) -> rune {
     assert(idx < len(state.content^)) // top level functions are expected to  check for this beforehand
-    return utf8.rune_at_pos(state.content^, idx)
+    // return utf8.rune_at_pos(state.content^, idx)
+    // TODO: using rune_at_pos is indeed very slow, we'll have to use a rune index at some point
+    return cast(rune)state.content[idx]
 }
 
 state_char :: proc(state: ^ParserState) -> rune {
