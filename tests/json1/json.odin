@@ -168,7 +168,7 @@ json_grammar :: proc(allocator: mem.Allocator) -> ^pcl.Parser {
 
     //grammar definition
 
-    json_object := declare(name = "object", exec = exec_object)
+    json_object := declare(name = "object")
 
     value   := declare(name = "value")
     values  := separated_items(value, ',', allow_empty_list = false, exec = exec_values)
@@ -180,7 +180,7 @@ json_grammar :: proc(allocator: mem.Allocator) -> ^pcl.Parser {
     id      := block('"', '"')
     entry   := seq(id, ':', value, name = "entry", exec = exec_entry)
     entries := seq(star(entry, ','), entry, exec = exec_entries)
-    define(json_object, seq('{', opt(entries), '}'))
+    define(json_object, seq('{', opt(entries), '}'), exec = exec_object)
     return json_object
 }
 

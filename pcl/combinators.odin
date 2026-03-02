@@ -36,11 +36,7 @@ SKIP: SkipProc = nil
 
 // combinators /////////////////////////////////////////////////////////////////
 
-declare :: proc(
-    name: string = "parser",
-    skip: SkipProc = SKIP,
-    exec: ExecProc = nil,
-) -> ^Parser {
+declare :: proc(name: string = "parser") -> ^Parser {
     parse := proc(self: ^Parser, state: ^ParserState) -> (res: ParseResult, err: ParserError) {
         if len(self.parsers) == 0 || self.parsers[0] == nil {
             return nil, parser_error(InternalError, state, "unimplemented parser `{}`.", self.name)
@@ -52,21 +48,27 @@ declare :: proc(
         }
         return res, nil
     }
-    return parser_create(name, parse, skip, exec, []^Parser{nil})
+    return parser_create(name, parse, nil, nil, []^Parser{nil})
 }
 
-define :: proc(parser: ^Parser, impl: ^Parser) {
+define :: proc(
+    parser: ^Parser,
+    impl: ^Parser,
+    skip: SkipProc = SKIP,
+    exec: ExecProc = nil,
+) {
     if len(parser.parsers) == 0 {
         fmt.printfln("error: cannot define parser {}.", parser.name)
     }
     if parser.parsers[0] != nil {
         fmt.printfln("error: redifinition of parser {}.", parser.name)
     }
-    if parser.exec != nil && impl.exec == nil {
-        impl.exec = parser.exec
+    if impl.exec == nil {
+        impl.exec = exec
     }
     impl.name = parser.name
     parser.parsers[0] = impl
+    parser.skip = skip
 }
 
 parser :: proc(
