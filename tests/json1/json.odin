@@ -119,7 +119,7 @@ exec_list :: proc(data: ^pcl.ExecData) -> pcl.ExecResult {
         fmt.printfln("list: {}", data.content)
     }
     value: JSON_Value = JSON_List{}
-    if len(data.content) == 3 {
+    if pcl.has_content(data, 1) {
         value = pcl.content(data, JSON_List, 1)
     }
     return pcl.result(data, value)
@@ -140,7 +140,7 @@ exec_object :: proc(data: ^pcl.ExecData) -> pcl.ExecResult {
         fmt.printfln("object: {}", data.content)
     }
     value: JSON_Value = JSON_Object{}
-    if len(data.content) > 2 {
+    if pcl.has_content(data, 1) {
         value = JSON_Object{
             entries = pcl.content(data, [dynamic]JSON_Entry, 1)
         }

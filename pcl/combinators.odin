@@ -135,7 +135,8 @@ opt :: proc(
         parser_skip(state, self.skip)
         sub_state := state^
         if res, err = parser_parse(&sub_state, self.parsers[0]); err != nil {
-            return nil, nil
+            res = cast(ExecResult)""
+            return parser_exec_with_child(state, self.exec, res), nil
         }
         free_all(state.pcl_handle.error_allocator)
         state_set(state, &sub_state)

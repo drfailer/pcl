@@ -109,17 +109,6 @@ exec_tree_node_exec :: proc(node: ^ExecTreeNode, exec_data: ^ExecData) -> ExecRe
     return node.ctx.exec(exec_data)
 }
 
-exec_tree_node_destroy :: proc(node: ^ExecTreeNode) {
-    // if node == nil {
-    //     return
-    // }
-    // for &child in node.childs {
-    //     exec_tree_node_destroy(child)
-    // }
-    // delete(node.childs)
-    // free(node)
-}
-
 // helper function and aliases /////////////////////////////////////////////////////////////
 
 user_data :: proc(data: ^ExecData, $T: typeid) -> T {
@@ -204,6 +193,31 @@ contents_from_data :: proc(data: ^ExecData, indexes: ..int, loc := #caller_locat
 contents :: proc {
     contents_from_data,
     contents_from_result,
+}
+
+result_has_content :: proc(result: ExecResult, indexes: ..int) -> bool {
+    if len(indexes) == 0 {
+        switch r in result {
+        case string: return r != ""
+        case rawptr: return r != nil
+        case uint: return true
+        case [dynamic]ExecResult: return len(r) > 0
+        }
+        return false
+    }
+    return result_has_content(result.([dynamic]ExecResult)[indexes[0]], ..indexes[1:])
+}
+
+data_has_content :: proc(data: ^ExecData, indexes: ..int) -> bool {
+    if len(indexes) == 0 {
+        return result_has_content(data.content[0])
+    }
+    return result_has_content(data.content[indexes[0]], ..indexes[1:])
+}
+
+has_content :: proc {
+    data_has_content,
+    result_has_content,
 }
 
 result :: proc(data: ^ExecData, value: $T) -> ExecResult {
