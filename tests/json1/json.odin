@@ -212,7 +212,7 @@ test_object :: proc(t: ^testing.T) {
         "list": [1, 2, 3, 4]
     }`
     state, result, ok := pcl.parse_string(pcl_handle, json_parser, &str, &exec_data)
-    object := (cast(^JSON_Value)result.(rawptr)).(JSON_Object)
+    object := pcl.content(result, ^JSON_Value).(JSON_Object)
 
     testing.expect(t, ok == true)
     testing.expect(t, len(object.entries) == 6)
@@ -268,6 +268,6 @@ main :: proc() {
         "list": [1, 2, 3, 4]
     }`
     state, result, ok := pcl.parse_string(pcl_handle, json_parser, &str, &exec_data)
-    object := cast(^JSON_Value)result.(rawptr)
+    object := pcl.content(result, ^JSON_Value)
     fmt.println(object)
 }

@@ -26,14 +26,20 @@ ExecContext :: struct {
     state: ParserState,
 }
 
-ExecResult :: union {
+ExecResultData :: union {
     string,              // sub-string of the state
     rawptr,              // user pointer
     uint,                // register value
     [dynamic]ExecResult, // multiple results
 }
 
+ExecResult :: struct {
+    data: ExecResultData,
+    loc: Location,
+}
+
 ExecData :: struct {
+    state: ^ParserState,
     content: []ExecResult,
     user_data: rawptr,
     allocator: mem.Allocator,
@@ -49,6 +55,7 @@ exec_tree_exec :: proc(
     node_pool: ^MemoryPool(ExecTreeNode),
 ) -> ExecResult {
     exec_data := ExecData{
+        state = nil,
         user_data = user_data,
         allocator = allocator,
         node_pool = node_pool,
@@ -65,19 +72,21 @@ exec_tree_exec :: proc(
  * - childs & exec       => return exec(childs_results)
  */
 exec_tree_node_exec :: proc(node: ^ExecTreeNode, exec_data: ^ExecData) -> ExecResult {
+    loc := node.ctx.state.loc
+    exec_data.state = &node.ctx.state
     // release the node once the execution is done
     defer memory_pool_release(exec_data.node_pool, node)
 
     if len(node.childs) == 0 {
         if node.ctx.exec == nil {
             if .ListResult not_in node.flags {
-                return state_string(&node.ctx.state)
+                return ExecResult{state_string(&node.ctx.state), loc}
             } else {
                 empty_resutls := make([dynamic]ExecResult, allocator = exec_data.allocator)
-                return empty_resutls
+                return ExecResult{empty_resutls, loc}
             }
         }
-        exec_data.content = []ExecResult{state_string(&node.ctx.state)}
+        exec_data.content = []ExecResult{ExecResult{state_string(&node.ctx.state), loc}}
     } else {
         childs_results := make([dynamic]ExecResult, allocator = exec_data.allocator)
 
@@ -98,7 +107,7 @@ exec_tree_node_exec :: proc(node: ^ExecTreeNode, exec_data: ^ExecData) -> ExecRe
                 delete(childs_results)
                 return result
             }
-            return childs_results
+            return ExecResult{childs_results, loc}
         } else {
             exec_data.content = childs_results[:]
             result := node.ctx.exec(exec_data)
@@ -115,48 +124,71 @@ user_data :: proc(data: ^ExecData, $T: typeid) -> T {
     return cast(T)data.user_data
 }
 
-content_cast_value :: proc($T: typeid, result: ExecResult) -> T {
+content_len_from_result :: proc(result: ExecResult) -> int {
+    #partial switch r in result.data {
+    case ([dynamic]ExecResult): return len(r)
+    }
+    return 1
+}
+
+content_len_from_data :: proc(data: ^ExecData) -> int {
+    return len(data.content)
+}
+
+content_len :: proc{
+    content_len_from_result,
+    content_len_from_data,
+}
+
+@(private)
+content_cast_value :: proc($T: typeid, result: ExecResult, loc := #caller_location) -> T {
     when intrinsics.type_is_pointer(T) {
-        return cast(T)result.(rawptr)
+        return cast(T)result.data.(rawptr)
     } else when size_of(T) <= size_of(uint) {
-        return transmute(T)result.(uint)
+        return transmute(T)result.data.(uint)
     } else {
-        return (cast(^T)result.(rawptr))^
+        return (cast(^T)result.data.(rawptr))^
     }
 }
 
-content_value_from_result :: proc(result: ExecResult, $T: typeid, indexes: ..int) -> T {
+@(private)
+get_result_at_idx :: proc(result: ExecResult, idx: int, loc := #caller_location) -> ExecResult {
+    array := result.data.([dynamic]ExecResult) or_else nil
+    if array == nil || idx >= len(array) {
+        fmt.println(loc, "error: invalid content position.")
+    }
+    return array[idx]
+}
+
+content_value_from_result :: proc(result: ExecResult, $T: typeid, indexes: ..int, loc := #caller_location) -> T {
     if len(indexes) == 0 {
         return content_cast_value(T, result)
     }
-    content := result.([dynamic]ExecResult)[indexes[0]]
-    for idx in indexes[1:] {
-        content = content.([dynamic]ExecResult)[idx]
-    }
-    return content_cast_value(T, content)
+    return content_value_from_result(get_result_at_idx(result, indexes[0], loc), T, ..indexes[1:], loc = loc)
 }
 
-content_value_from_data :: proc(data: ^ExecData, $T: typeid, indexes: ..int) -> T {
+content_value_from_data :: proc(data: ^ExecData, $T: typeid, indexes: ..int, loc := #caller_location) -> T {
     if len(indexes) == 0 {
         return content_cast_value(T, data.content[0])
     }
-    return content_value_from_result(data.content[indexes[0]], T, ..indexes[1:])
+    return content_value_from_result(data.content[indexes[0]], T, ..indexes[1:], loc = loc)
 }
 
-content_string_from_result :: proc(result: ExecResult, indexes: ..int) -> string {
+content_string_from_result :: proc(result: ExecResult, indexes: ..int, loc := #caller_location) -> string {
     if len(indexes) == 0 {
-        return result.(string)
+         #partial switch r in result.data {
+         case string: return r
+         case:
+             fmt.println(loc, "error: `content` used on an non string content.")
+             return ""
+         }
     }
-    content := result.([dynamic]ExecResult)[indexes[0]]
-    for idx in indexes[1:] {
-        content = content.([dynamic]ExecResult)[idx]
-    }
-    return content.(string)
+    return content_string_from_result(get_result_at_idx(result, indexes[0], loc), ..indexes[1:], loc = loc)
 }
 
-content_string_from_data :: proc(data: ^ExecData, indexes: ..int) -> string {
+content_string_from_data :: proc(data: ^ExecData, indexes: ..int, loc := #caller_location) -> string {
     if len(indexes) == 0 {
-        return data.content[0].(string)
+        return data.content[0].data.(string)
     }
     return content_string_from_result(data.content[indexes[0]], ..indexes[1:])
 }
@@ -168,24 +200,23 @@ content :: proc {
     content_string_from_data,
 }
 
-contents_from_result :: proc(result: ExecResult, indexes: ..int) -> ([]ExecResult, bool) {
+contents_from_result :: proc(result: ExecResult, indexes: ..int, loc := #caller_location) -> []ExecResult {
     if len(indexes) == 0 {
-        #partial switch r in result {
-        case ([dynamic]ExecResult): return r[:], true
-        case: return nil, false
+        #partial switch r in result.data {
+        case ([dynamic]ExecResult): return r[:]
+        case:
+            fmt.println(loc, "error: `contents` used on an non array content.")
+            return nil
         }
     }
-    return contents_from_result(result.([dynamic]ExecResult)[indexes[0]], ..indexes[1:])
+    return contents_from_result(get_result_at_idx(result, indexes[0], loc), ..indexes[1:])
 }
 
 contents_from_data :: proc(data: ^ExecData, indexes: ..int, loc := #caller_location) -> []ExecResult {
     if len(indexes) == 0 {
         return data.content
     }
-    results, ok := contents_from_result(data.content[indexes[0]], ..indexes[1:])
-    if !ok {
-        fmt.println(loc, "`contents` used on an non array content.")
-    }
+    results := contents_from_result(data.content[indexes[0]], ..indexes[1:], loc = loc)
     return results
 }
 
@@ -195,24 +226,24 @@ contents :: proc {
     contents_from_result,
 }
 
-result_has_content :: proc(result: ExecResult, indexes: ..int) -> bool {
+result_has_content :: proc(result: ExecResult, indexes: ..int, loc := #caller_location) -> bool {
     if len(indexes) == 0 {
-        switch r in result {
-        case string: return r != ""
-        case rawptr: return r != nil
+        switch data in result.data {
+        case string: return data != ""
+        case rawptr: return data != nil
         case uint: return true
-        case [dynamic]ExecResult: return len(r) > 0
+        case [dynamic]ExecResult: return len(data) > 0
         }
         return false
     }
-    return result_has_content(result.([dynamic]ExecResult)[indexes[0]], ..indexes[1:])
+    return result_has_content(get_result_at_idx(result, indexes[0], loc), ..indexes[1:])
 }
 
-data_has_content :: proc(data: ^ExecData, indexes: ..int) -> bool {
+data_has_content :: proc(data: ^ExecData, indexes: ..int, loc := #caller_location) -> bool {
     if len(indexes) == 0 {
         return result_has_content(data.content[0])
     }
-    return result_has_content(data.content[indexes[0]], ..indexes[1:])
+    return result_has_content(data.content[indexes[0]], ..indexes[1:], loc = loc)
 }
 
 has_content :: proc {
@@ -220,14 +251,37 @@ has_content :: proc {
     result_has_content,
 }
 
+content_location_from_result :: proc(result: ExecResult, indexes: ..int, loc := #caller_location) -> Location {
+    if len(indexes) == 0 {
+        return result.loc
+    }
+    return content_location_from_result(get_result_at_idx(result, indexes[0], loc), ..indexes[1:], loc = loc)
+}
+
+content_location_from_data :: proc(data: ^ExecData, indexes: ..int, loc := #caller_location) -> Location {
+    if len(indexes) == 0 {
+        return content_location_from_result(data.content[0])
+    }
+    return content_location_from_result(data.content[indexes[0]], ..indexes[1:], loc = loc)
+}
+
+content_location :: proc {
+    content_location_from_data,
+    content_location_from_result,
+}
+
 result :: proc(data: ^ExecData, value: $T) -> ExecResult {
     when intrinsics.type_is_pointer(T) {
-        return cast(rawptr)value
+        return ExecResult{cast(rawptr)value, data.state.loc}
     } else when size_of(T) <= size_of(uint) {
-        return transmute(uint)value
+        return ExecResult{transmute(uint)value, data.state.loc}
     } else {
         copy := new(T, allocator = data.allocator) // TODO: this allocator is for the nodes, we need a temporary allocator here and we need to be able to free the data
         copy^ = value
-        return cast(rawptr)copy
+        return ExecResult{cast(rawptr)copy, data.state.loc}
     }
+}
+
+no_result :: proc(data: ^ExecData) -> ExecResult {
+    return ExecResult{cast(rawptr)nil, data.state.loc}
 }

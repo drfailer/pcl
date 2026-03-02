@@ -147,12 +147,12 @@ function_definition := parser(
     name = "function_definition",
     rule = seq(type, identifier, argument_list, instruction_block),
     exec = proc(data: ^ExecData) -> ExecResult {
-        fmt.println("function found:")
+        fmt.printfln("function found at {}:", content_location(data))
         fmt.printfln("return type: {}", content(data, 0))
         fmt.printfln("name: {}", content(data, 1))
         fmt.printfln("arguments: {}", contents(data, 2)) // /!\ we get an array here so we use `contenS`, this may change in the future...
         fmt.printfln("code: {}", content(data, 3))
-        return nil // no result
+        return pcl.no_result(data)
     },
 )
 ```

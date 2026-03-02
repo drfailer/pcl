@@ -155,6 +155,7 @@ parser_exec_with_childs :: proc(
     childs: [dynamic]ParseResult,
     flags: bit_set[ExecFlag] = {},
 ) -> ParseResult {
+    loc := state.loc
     pr: ParseResult
 
     // fmt.printfln("rec depth = {}, branch depth = {}", state.pcl_handle.rd.depth, state.pcl_handle.branch_depth)
@@ -162,13 +163,17 @@ parser_exec_with_childs :: proc(
         if len(childs) == 0 {
             if exec == nil {
                 if .ListResult not_in flags {
-                    pr = cast(ExecResult)state_string(state)
+                    pr = ExecResult{state_string(state), loc}
                 } else {
-                    pr = cast(ExecResult)make([dynamic]ExecResult, allocator = state.pcl_handle.exec_allocator)
+                    pr = ExecResult{
+                        make([dynamic]ExecResult, allocator = state.pcl_handle.exec_allocator),
+                        loc,
+                    }
                 }
             } else {
                 pr = exec(&ExecData{
-                    content = []ExecResult{cast(ExecResult)state_string(state)},
+                    state = state,
+                    content = []ExecResult{ExecResult{state_string(state), loc}},
                     user_data = state.pcl_handle.user_data,
                     allocator = state.pcl_handle.exec_allocator,
                 })
@@ -197,10 +202,11 @@ parser_exec_with_childs :: proc(
                     pr = childs_results[0]
                     delete(childs_results)
                 } else {
-                    pr = cast(ExecResult)childs_results
+                    pr = ExecResult{childs_results, loc}
                 }
             } else {
                 pr = exec(&ExecData{
+                    state = state,
                     content = childs_results[:],
                     user_data = state.pcl_handle.user_data,
                     allocator = state.pcl_handle.exec_allocator,

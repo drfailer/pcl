@@ -29,7 +29,7 @@ test_bracket :: proc(t: ^testing.T) {
     state, result, ok := pcl.parse_string(pcl_handle, parser, &str)
 
     testing.expect(t, ok)
-    testing.expect(t, result.(string) == `
+    testing.expect(t, pcl.content(result) == `
             printf("}\n");
         `)
 }
@@ -52,7 +52,7 @@ test_quotes :: proc(t: ^testing.T) {
     state, result, ok := pcl.parse_string(pcl_handle, parser, &str)
 
     testing.expect(t, ok)
-    testing.expect(t, result.(string) == ` printf(\"\"); `)
+    testing.expect(t, pcl.content(result) == ` printf(\"\"); `)
 }
 
 print_bracket :: proc() {

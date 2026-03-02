@@ -29,8 +29,8 @@ doxygen :: proc(t: ^testing.T) {
     state, result, ok := pcl.parse_string(pcl_handle, parser, &str)
 
     testing.expect(t, ok)
-    testing.expect(t, len(result.([dynamic]pcl.ExecResult)) == 3)
-    testing.expect(t, result.([dynamic]pcl.ExecResult)[0].(string) == "/// @brief test\n")
-    testing.expect(t, result.([dynamic]pcl.ExecResult)[1].(string) == "/// @param foo Foo param.\n")
-    testing.expect(t, result.([dynamic]pcl.ExecResult)[2].(string) == "/// @return Value.")
+    testing.expect(t, pcl.content_len(result) == 3)
+    testing.expect(t, pcl.content(result, 0) == "/// @brief test\n")
+    testing.expect(t, pcl.content(result, 1) == "/// @param foo Foo param.\n")
+    testing.expect(t, pcl.content(result, 2) == "/// @return Value.")
 }

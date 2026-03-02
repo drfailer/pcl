@@ -69,14 +69,14 @@ exec_number :: proc($type: typeid) -> pcl.ExecProc {
             value = cast(JSON_Number)f32_value
         }
         add_value(ed, value)
-        return nil
+        return pcl.no_result(data)
     }
 }
 
 exec_string :: proc(data: ^pcl.ExecData) -> pcl.ExecResult {
     ed := pcl.user_data(data, ^ExecData)
     add_value(ed, cast(JSON_String)pcl.content(data, 0))
-    return nil
+    return pcl.no_result(data)
 }
 
 exec_entry :: proc(data: ^pcl.ExecData) -> pcl.ExecResult {
@@ -85,14 +85,14 @@ exec_entry :: proc(data: ^pcl.ExecData) -> pcl.ExecResult {
         id = pcl.content(data, 0),
         value = pop(&ed.value_stack),
     })
-    return nil
+    return pcl.no_result(data)
 }
 
 exec_list_start :: proc(data: ^pcl.ExecData) -> pcl.ExecResult {
     ed := pcl.user_data(data, ^ExecData)
     ed.list_count += 1
     append(&ed.value_stack, make(JSON_List, allocator = ed.exec_allocator))
-    return nil
+    return pcl.no_result(data)
 }
 
 exec_list_end :: proc(data: ^pcl.ExecData) -> pcl.ExecResult {
@@ -102,7 +102,7 @@ exec_list_end :: proc(data: ^pcl.ExecData) -> pcl.ExecResult {
         list := pop(&ed.value_stack)
         append(&ed.value_stack[len(ed.value_stack) - 1].(JSON_List), list)
     }
-    return nil
+    return pcl.no_result(data)
 }
 
 exec_object_start :: proc(data: ^pcl.ExecData) -> pcl.ExecResult {
@@ -110,13 +110,13 @@ exec_object_start :: proc(data: ^pcl.ExecData) -> pcl.ExecResult {
     append(&ed.object_stack, JSON_Object{
         entries = make([dynamic]JSON_Entry, allocator = ed.exec_allocator)
     })
-    return nil
+    return pcl.no_result(data)
 }
 
 exec_object_end :: proc(data: ^pcl.ExecData) -> pcl.ExecResult {
     ed := pcl.user_data(data, ^ExecData)
     add_value(ed, pop(&ed.object_stack))
-    return nil
+    return pcl.no_result(data)
 }
 
 number_grammar :: proc() -> ^pcl.Parser {
