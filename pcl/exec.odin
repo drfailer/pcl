@@ -152,12 +152,27 @@ content_cast_value :: proc($T: typeid, result: ExecResult, loc := #caller_locati
 }
 
 @(private)
-get_result_at_idx :: proc(result: ExecResult, idx: int, loc := #caller_location) -> ExecResult {
+get_result_at_idx_from_result :: proc(result: ExecResult, idx: int, loc := #caller_location) -> ExecResult {
     array := result.data.([dynamic]ExecResult) or_else nil
     if array == nil || idx >= len(array) {
         fmt.println(loc, "error: invalid content position.")
     }
     return array[idx]
+}
+
+@(private)
+get_result_at_idx_from_data :: proc(data: ^ExecData, idx: int, loc := #caller_location) -> ExecResult {
+    if idx >= len(data.content) {
+        fmt.println(loc, "error: invalid content position.")
+    }
+    return data.content[idx]
+}
+
+
+@(private)
+get_result_at_idx :: proc{
+    get_result_at_idx_from_result,
+    get_result_at_idx_from_data,
 }
 
 content_value_from_result :: proc(result: ExecResult, $T: typeid, indexes: ..int, loc := #caller_location) -> T {
@@ -171,7 +186,7 @@ content_value_from_data :: proc(data: ^ExecData, $T: typeid, indexes: ..int, loc
     if len(indexes) == 0 {
         return content_cast_value(T, data.content[0])
     }
-    return content_value_from_result(data.content[indexes[0]], T, ..indexes[1:], loc = loc)
+    return content_value_from_result(get_result_at_idx(data, indexes[0], loc), T, ..indexes[1:], loc = loc)
 }
 
 content_string_from_result :: proc(result: ExecResult, indexes: ..int, loc := #caller_location) -> string {
@@ -190,7 +205,7 @@ content_string_from_data :: proc(data: ^ExecData, indexes: ..int, loc := #caller
     if len(indexes) == 0 {
         return data.content[0].data.(string)
     }
-    return content_string_from_result(data.content[indexes[0]], ..indexes[1:])
+    return content_string_from_result(get_result_at_idx(data, indexes[0], loc), ..indexes[1:])
 }
 
 content :: proc {
@@ -216,7 +231,7 @@ contents_from_data :: proc(data: ^ExecData, indexes: ..int, loc := #caller_locat
     if len(indexes) == 0 {
         return data.content
     }
-    results := contents_from_result(data.content[indexes[0]], ..indexes[1:], loc = loc)
+    results := contents_from_result(get_result_at_idx(data, indexes[0], loc), ..indexes[1:], loc = loc)
     return results
 }
 
@@ -243,7 +258,7 @@ data_has_content :: proc(data: ^ExecData, indexes: ..int, loc := #caller_locatio
     if len(indexes) == 0 {
         return result_has_content(data.content[0])
     }
-    return result_has_content(data.content[indexes[0]], ..indexes[1:], loc = loc)
+    return result_has_content(get_result_at_idx(data, indexes[0], loc), ..indexes[1:], loc = loc)
 }
 
 has_content :: proc {
@@ -262,7 +277,7 @@ content_location_from_data :: proc(data: ^ExecData, indexes: ..int, loc := #call
     if len(indexes) == 0 {
         return content_location_from_result(data.content[0])
     }
-    return content_location_from_result(data.content[indexes[0]], ..indexes[1:], loc = loc)
+    return content_location_from_result(get_result_at_idx(data, indexes[0], loc), ..indexes[1:], loc = loc)
 }
 
 content_location :: proc {
