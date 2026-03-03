@@ -303,16 +303,31 @@ content_location :: proc {
     content_location_from_result,
 }
 
-result :: proc(data: ^ExecData, value: $T) -> ExecResult {
+result_from_value :: proc(data: ^ExecData, value: $T) -> ExecResult {
     when intrinsics.type_is_pointer(T) {
         return ExecResult{cast(rawptr)value, data.state.loc}
     } else when size_of(T) <= size_of(uint) {
         return ExecResult{transmute(uint)value, data.state.loc}
+    } else when intrinsics.type_is_string(T) {
+        return ExecResult{value, data.state.loc}
     } else {
         copy := new(T, allocator = data.allocator) // TODO: this allocator is for the nodes, we need a temporary allocator here and we need to be able to free the data
         copy^ = value
         return ExecResult{cast(rawptr)copy, data.state.loc}
     }
+}
+
+result_from_data :: proc(data: ^ExecData) -> ExecResult {
+    childs_results := make([dynamic]ExecResult, allocator = data.allocator)
+    for result in data.content {
+        append(&childs_results, result)
+    }
+    return ExecResult{childs_results, data.state.loc}
+}
+
+result :: proc{
+    result_from_value,
+    result_from_data,
 }
 
 no_result :: proc(data: ^ExecData) -> ExecResult {
