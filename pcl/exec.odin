@@ -73,7 +73,6 @@ exec_tree_exec :: proc(
  */
 exec_tree_node_exec :: proc(node: ^ExecTreeNode, exec_data: ^ExecData) -> ExecResult {
     loc := node.ctx.state.loc
-    exec_data.state = &node.ctx.state
     // release the node once the execution is done
     defer memory_pool_release(exec_data.node_pool, node)
 
@@ -110,11 +109,13 @@ exec_tree_node_exec :: proc(node: ^ExecTreeNode, exec_data: ^ExecData) -> ExecRe
             return ExecResult{childs_results, loc}
         } else {
             exec_data.content = childs_results[:]
+            exec_data.state = &node.ctx.state
             result := node.ctx.exec(exec_data)
             delete(childs_results)
             return result
         }
     }
+    exec_data.state = &node.ctx.state
     return node.ctx.exec(exec_data)
 }
 
@@ -252,6 +253,10 @@ contents_from_data :: proc(data: ^ExecData, indexes: ..int, loc := #caller_locat
 contents :: proc {
     contents_from_data,
     contents_from_result,
+}
+
+content_string :: proc(data: ^ExecData) -> string {
+    return state_string(data.state)
 }
 
 result_has_content :: proc(result: ExecResult, indexes: ..int, loc := #caller_location) -> bool {
