@@ -83,7 +83,7 @@ parser :: proc(
     return rule
 }
 
-expect :: proc(parser: ^Parser) -> ^Parser {
+expect :: proc(parser: CombinatorInput) -> ^Parser {
     parse := proc(self: ^Parser, state: ^ParserState) -> (res: ParseResult, err: ParserError) {
         res, err = parser_parse(state, self.parsers[0])
         if err != nil {
