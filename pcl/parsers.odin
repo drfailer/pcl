@@ -410,8 +410,8 @@ separated_items :: proc(
         trailing := false
 
         for {
-            parser_skip(state, self.skip)
             sub_state = state^
+            parser_skip(&sub_state, self.skip)
             if res, err = parser_parse(&sub_state, self.parsers[0]); err != nil {
                 break
             }
@@ -419,10 +419,11 @@ separated_items :: proc(
             append(&results, res)
             trailing = false
 
-            parser_skip(state, self.skip)
-            if state_char(state) != self.separator {
+            parser_skip(&sub_state, self.skip)
+            if state_char(&sub_state) != self.separator {
                 break
             }
+            state_set(state, &sub_state)
             state_eat_one(state)
             state_save_pos(state)
             trailing = true
