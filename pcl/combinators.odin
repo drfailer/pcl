@@ -113,12 +113,12 @@ single :: proc(
         parser_skip(state, self.skip)
         sub_state := state^
         if res, err = parser_parse(&sub_state, self.parsers[0]); err != nil {
-            state_set(state, &sub_state)
+            state_set_cur(state, &sub_state)
             return nil, err
         }
-        state_set(state, &sub_state)
+        state_set_cur(state, &sub_state)
         res = parser_exec(state, self.exec, res)
-        state_save_pos(state)
+        state_set_pos(state, &sub_state)
         return res, nil
     }
     return parser_create(name, parse, skip, exec, create_parser_array(context.allocator, skip, input))
@@ -157,9 +157,9 @@ opt :: proc(
             return parser_exec_with_child(state, self.exec, res), nil
         }
         free_all(state.pcl_handle.error_allocator)
-        state_set(state, &sub_state)
+        state_set_cur(state, &sub_state)
         res = parser_exec(state, self.exec, res)
-        state_save_pos(state)
+        state_set_pos(state, &sub_state)
         return res, nil
     }
     return parser_create(name, parse, skip, exec, create_parser_array(context.allocator, skip, input))
@@ -186,10 +186,10 @@ or :: proc(
             sub_err: ParserError
 
             if sub_res, sub_err = parser_parse(&sub_state, parser); sub_err == nil {
-                state_set(state, &sub_state)
+                state_set_cur(state, &sub_state)
                 state_leave_branch(state)
                 res = parser_exec(state, self.exec, sub_res)
-                state_save_pos(state)
+                state_set_pos(state, &sub_state)
                 return res, nil
             }
             if !parser_can_recover(sub_err) {
@@ -224,10 +224,10 @@ seq :: proc(
                 return nil, err
             }
             append(&results, sub_res)
-            state_set(state, &sub_state)
+            state_set_cur(state, &sub_state)
         }
         res = parser_exec(state, self.exec, results)
-        state_save_pos(state)
+        state_set_pos(state, &sub_state)
         return res, nil
     }
     return parser_create(name, parse, skip, exec, create_parser_array(context.allocator, skip, ..inputs))
@@ -254,10 +254,10 @@ star :: proc(
                 }
             }
             append(&results, sub_res)
-            state_set(state, &sub_state)
+            state_set_cur(state, &sub_state)
         }
         res = parser_exec(state, self.exec, results, flags = {.ListResult})
-        state_save_pos(state)
+        state_set_pos(state, &sub_state)
         return res, nil
     }
     if len(inputs) > 1 {
@@ -287,11 +287,11 @@ plus :: proc(
                 }
             }
             append(&results, sub_res)
-            state_set(state, &sub_state)
+            state_set_cur(state, &sub_state)
         }
         if state.cur > state.pos {
             res = parser_exec(state, self.exec, results, flags = {.ListResult})
-            state_save_pos(state)
+            state_set_pos(state, &sub_state)
             return res, nil
         }
         return nil, syntax_error(state, "rule {%s}+ failed.", self.parsers[0].name)
@@ -318,12 +318,12 @@ times :: proc(
         for !state_eof(state) && count < nb_times {
             sub_res := parser_parse(&sub_state, self.parsers[0]) or_break
             append(&results, sub_res)
-            state_set(state, &sub_state)
+            state_set_cur(state, &sub_state)
             count += 1
         }
         if count == nb_times {
             res = parser_exec(state, self.exec, results, flags = {.ListResult})
-            state_save_pos(state)
+            state_set_pos(state, &sub_state)
             return res, nil
         }
         return nil, syntax_error(state, "rule {%s}{%d} failed (%d found)",
@@ -361,7 +361,7 @@ combine :: proc(
         }
         state.pos = pos
         res = parser_exec(state, self.exec)
-        state_save_pos(state)
+        state_set_pos(state, state)
         return res, nil
     }
     if len(inputs) > 1 {

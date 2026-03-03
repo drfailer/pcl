@@ -23,11 +23,13 @@ apply_predicate :: proc(
     }
 
     if pred(state_char(state)) {
-        if ok := state_eat_one(state); !ok {
+        sub_state := state^
+        if ok := state_eat_one(&sub_state); !ok {
             return nil, InternalError{"state_eat_one failed."}
         }
+        state_set_cur(state, &sub_state)
         res = parser_exec(state, self.exec)
-        state_save_pos(state)
+        state_set_pos(state, &sub_state)
         return res, nil
     }
     return nil, error(self, state)
@@ -121,11 +123,13 @@ lit_c :: proc(
         }
 
         if (state_char(state) == self.char) {
-            if ok := state_eat_one(state); !ok {
+            sub_state := state^
+            if ok := state_eat_one(&sub_state); !ok {
                 return nil, InternalError{"state_eat_one failed."}
             }
+            state_set_cur(state, &sub_state)
             res = parser_exec(state, self.exec)
-            state_save_pos(state)
+            state_set_pos(state, &sub_state)
             return res, nil
         }
         return nil, syntax_error(state, "{}: expected '{}', but {} was found.",
@@ -150,16 +154,18 @@ lit_str :: proc(
     parse := proc(parser: ^Parser, state: ^ParserState) -> (res: ParseResult, err: ParserError) {
         self := cast(^LitStrParser)parser
         parser_skip(state, self.skip)
+        sub_state := state^
         for c in self.str {
-            if state_eof(state) || state_char(state) != c {
+            if state_eof(&sub_state) || state_char(&sub_state) != c {
                 return nil, syntax_error(state, "expected literal `{}`", self.str)
             }
-            if ok := state_eat_one(state); !ok {
+            if ok := state_eat_one(&sub_state); !ok {
                 return nil, InternalError{"state_eat_one failed."}
             }
         }
+        state_set_cur(state, &sub_state)
         res = parser_exec(state, self.exec)
-        state_save_pos(state)
+        state_set_pos(state, &sub_state)
         return res, nil
     }
     parser := parser_create(LitStrParser, name, parse, skip, exec)
@@ -284,7 +290,7 @@ block_char :: proc(
         state.cur = end_cur
         res = parser_exec(state, self.exec)
         state.cur = cur
-        state_save_pos(state)
+        state_set_pos(state, state)
         return res, nil
     }
     return parser_create(name, parse, skip, exec)
@@ -343,7 +349,7 @@ block_str :: proc(
         state.cur = end_cur
         res = parser_exec(state, self.exec)
         state.cur = cur
-        state_save_pos(state)
+        state_set_pos(state, state)
         return res, nil
     }
     return parser_create(name, parse, skip, exec)
@@ -364,22 +370,22 @@ line_starting_with :: proc(
 ) -> ^Parser {
     parse := proc(self: ^Parser, state: ^ParserState) -> (res: ParseResult, err: ParserError) {
         parser_skip(state, self.skip)
+        sub_state := state^
         if len(self.parsers) > 0 && self.parsers[0] != nil {
-            sub_state := state^
             if res, err = parser_parse(&sub_state, self.parsers[0]); err != nil {
                 return nil, err
             }
-            state_set(state, &sub_state)
         }
-        for !state_eof(state) {
-            c := state_char(state)
-            state_eat_one(state)
+        for !state_eof(&sub_state) {
+            c := state_char(&sub_state)
+            state_eat_one(&sub_state)
             if c == '\n' {
                 break;
             }
         }
+        state_set_cur(state, &sub_state)
         res = parser_exec(state, self.exec) // TODO: the previous result is discarded
-        state_save_pos(state)
+        state_set_pos(state, &sub_state)
         return res, nil
     }
     return parser_create(name, parse, skip, exec, create_parser_array(context.allocator, skip, start_parser))
@@ -405,17 +411,16 @@ separated_items :: proc(
 ) -> ^Parser {
     parse := proc(parser: ^Parser, state: ^ParserState) -> (res: ParseResult, err: ParserError) {
         self := cast(^SeparatedItemsParser)parser
+        parser_skip(state, self.skip)
         results := make([dynamic]ParseResult, allocator = state.pcl_handle.tree_allocator)
-        sub_state: ParserState
+        sub_state := state^
         trailing := false
 
         for {
-            sub_state = state^
             parser_skip(&sub_state, self.skip)
             if res, err = parser_parse(&sub_state, self.parsers[0]); err != nil {
                 break
             }
-            state_set(state, &sub_state)
             append(&results, res)
             trailing = false
 
@@ -423,9 +428,7 @@ separated_items :: proc(
             if state_char(&sub_state) != self.separator {
                 break
             }
-            state_set(state, &sub_state)
-            state_eat_one(state)
-            state_save_pos(state)
+            state_eat_one(&sub_state)
             trailing = true
         }
 
@@ -437,8 +440,9 @@ separated_items :: proc(
             return nil, syntax_error(state, "no items found in `{}({})`.",
                                      self.name, self.separator)
         }
+        state_set_cur(state, &sub_state)
         res = parser_exec(state, self.exec, results, flags = {.ListResult})
-        state_save_pos(state)
+        state_set_pos(state, &sub_state)
         return res, nil
     }
     parser := parser_create(SeparatedItemsParser, name, parse, skip, exec, parsers = []^Parser{parser})
@@ -447,5 +451,3 @@ separated_items :: proc(
     parser.allow_empty_list = allow_empty_list
     return parser
 }
-
-// numbers /////////////////////////////////////////////////////////////////////
