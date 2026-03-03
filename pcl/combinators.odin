@@ -87,6 +87,8 @@ expect :: proc(parser: ^Parser) -> ^Parser {
     parse := proc(self: ^Parser, state: ^ParserState) -> (res: ParseResult, err: ParserError) {
         res, err = parser_parse(state, self.parsers[0])
         if err != nil {
+            parser_error_report(err)
+            err = syntax_error(state, "expected rule failed.")
             parser_fatal_error(&err)
         }
         return res, err
