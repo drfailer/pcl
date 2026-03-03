@@ -355,13 +355,14 @@ combine :: proc(
 ) -> ^Parser {
     parse := proc(self: ^Parser, state: ^ParserState) -> (res: ParseResult, err: ParserError) {
         parser_skip(state, self.skip)
-        pos := state.pos
-        if res, err = parser_parse(state, self.parsers[0]); err != nil {
+        sub_state := state^
+
+        if res, err = parser_parse(&sub_state, self.parsers[0]); err != nil {
             return nil, err
         }
-        state.pos = pos
+        state_set_cur(state, &sub_state)
         res = parser_exec(state, self.exec)
-        state_set_pos(state, state)
+        state_set_pos(state, &sub_state)
         return res, nil
     }
     if len(inputs) > 1 {

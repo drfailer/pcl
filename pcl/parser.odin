@@ -119,11 +119,10 @@ parser_skip :: proc(state: ^ParserState, parser_skip: SkipProc) {
     if parser_skip == nil {
         return
     }
-    state := state
     for !state_eof(state) && parser_skip(state_char(state)) {
         state_eat_one(state) or_break
     }
-    state_set_pos(state, state)
+    state.pos = state.cur
 }
 
 // errors //////////////////////////////////////////////////////////////////////

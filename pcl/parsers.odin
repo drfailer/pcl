@@ -203,21 +203,22 @@ block_char :: proc(
     name: string = "block",
 ) -> ^Parser {
     parse := proc(self: ^Parser, state: ^ParserState) -> (res: ParseResult, err: ParserError) {
+        parser_skip(state, self.skip)
+        sub_state := state^
         is_closing_map: map[rune]bool
         defer delete(is_closing_map)
         char_stack: [dynamic]rune
         defer delete(char_stack)
 
-        parser_skip(state, self.skip)
-        if state_char(state) != opening {
+        if state_char(&sub_state) != opening {
             return nil, syntax_error(state, "opening symbol not found in `{}({}, {})`.",
                                      self.name, opening, closing)
         }
-        state_eat_one(state)
+        state_eat_one(&sub_state)
         append(&char_stack, closing)
 
-        begin_cur := state.cur
-        end_cur := state.cur
+        begin_cur := sub_state.cur
+        end_cur := sub_state.cur
         escaped := false
         if opening == closing {
             is_closing_map[opening] = true
@@ -228,19 +229,19 @@ block_char :: proc(
 
         for len(char_stack) > 0 {
             escaped = false
-            if state_eof(state) {
+            if state_eof(&sub_state) {
                 return nil, syntax_error(state,
                                          "closing symbol not found in `{}('{}', '{}')`.",
                                          self.name, opening, closing)
             }
-            if state_char(state) == '\\' {
+            if state_char(&sub_state) == '\\' {
                 escaped = true
-                state_eat_one(state)
-                state_eat_one(state)
+                state_eat_one(&sub_state)
+                state_eat_one(&sub_state)
                 continue
             }
 
-            switch state_char(state) {
+            switch state_char(&sub_state) {
             // we can image use one of these symbols to write strings in a
             // weird syntax, however, some of these may appear alone on
             // conventional syntaxes (especially '<' and '>'), therefore, we
@@ -268,7 +269,7 @@ block_char :: proc(
                 closing_char = closing
             }
 
-            closing_condition := state_char(state) == closing_char
+            closing_condition := state_char(&sub_state) == closing_char
             if closing_condition && opening_char == closing_char {
                 closing_condition = is_closing_map[opening_char]
                 is_closing_map[opening_char] = !is_closing_map[opening_char]
@@ -277,20 +278,20 @@ block_char :: proc(
             if closing_condition {
                 if char_stack[len(char_stack) - 1] == closing_char {
                     pop(&char_stack)
-                    end_cur = state.cur
+                    end_cur = sub_state.cur
                 } else {
                 }
-            } else if state_char(state) == opening_char {
+            } else if state_char(&sub_state) == opening_char {
                 append(&char_stack, closing_char)
             }
-            state_eat_one(state)
+            state_eat_one(&sub_state)
         }
-        cur := state.cur
+        cur := sub_state.cur
         state.pos = begin_cur
         state.cur = end_cur
         res = parser_exec(state, self.exec)
-        state.cur = cur
-        state_set_pos(state, state)
+        state_set_cur(state, &sub_state)
+        state_set_pos(state, &sub_state)
         return res, nil
     }
     return parser_create(name, parse, skip, exec)
@@ -371,18 +372,20 @@ line_starting_with :: proc(
     parse := proc(self: ^Parser, state: ^ParserState) -> (res: ParseResult, err: ParserError) {
         parser_skip(state, self.skip)
         sub_state := state^
+
         if len(self.parsers) > 0 && self.parsers[0] != nil {
             if res, err = parser_parse(&sub_state, self.parsers[0]); err != nil {
                 return nil, err
             }
         }
-        for !state_eof(&sub_state) {
-            c := state_char(&sub_state)
+
+        // get the rest of the line
+        for !state_eof(&sub_state) && state_char(&sub_state) != '\n' {
             state_eat_one(&sub_state)
-            if c == '\n' {
-                break;
-            }
         }
+        state_eat_one(&sub_state)
+
+        // exec
         state_set_cur(state, &sub_state)
         res = parser_exec(state, self.exec) // TODO: the previous result is discarded
         state_set_pos(state, &sub_state)
