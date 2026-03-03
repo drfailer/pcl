@@ -157,6 +157,12 @@ syntax_error :: proc(state: ^ParserState, str: string, args: ..any, fatal := fal
     }
 }
 
+parser_fatal_error :: proc(error: ^ParserError) {
+    #partial switch &e in error {
+    case (SyntaxError): e.fatal = true
+    }
+}
+
 parser_can_recover :: proc(error: ParserError) -> bool {
     switch e in error {
     case InternalError: return false

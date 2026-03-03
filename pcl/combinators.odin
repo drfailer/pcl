@@ -83,6 +83,17 @@ parser :: proc(
     return rule
 }
 
+expect :: proc(parser: ^Parser) -> ^Parser {
+    parse := proc(self: ^Parser, state: ^ParserState) -> (res: ParseResult, err: ParserError) {
+        res, err = parser_parse(state, self.parsers[0])
+        if err != nil {
+            parser_fatal_error(&err)
+        }
+        return res, err
+    }
+    return parser_create("", parse, nil, nil, create_parser_array(context.allocator, nil, parser))
+}
+
 empty :: proc() -> ^Parser {
     parse := proc(self: ^Parser, state: ^ParserState) -> (res: ParseResult, err: ParserError) {
         return nil, nil
