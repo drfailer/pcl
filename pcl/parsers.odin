@@ -48,7 +48,7 @@ pred :: proc(
         self := cast(^PredicateParser)parser
         return apply_predicate(self, state, self.predicate,
             proc(parser: ^Parser, state: ^ParserState) -> ParserError {
-                return parser_error(SyntaxError, state, "{}: predicate failed", parser.name)
+                return syntax_error(state, "{}: predicate failed", parser.name)
             },
         )
     }
@@ -71,7 +71,7 @@ one_of :: proc(
                 return strings.contains_rune(chars, c)
             },
             proc(parser: ^Parser, state: ^ParserState) -> ParserError {
-                return parser_error(SyntaxError, state, "{}: expected one of [{}]", parser.name, chars)
+                return syntax_error(state, "{}: expected one of [{}]", parser.name, chars)
             },
         )
     }
@@ -93,7 +93,7 @@ range :: proc(
                 return c1 <= c && c <= c2
             },
             proc(parser: ^Parser, state: ^ParserState) -> ParserError {
-                return parser_error(SyntaxError, state, "{}: expected range({}, {})", parser.name, c1, c2)
+                return syntax_error(state, "{}: expected range({}, {})", parser.name, c1, c2)
             },
         )
     }
@@ -116,7 +116,7 @@ lit_c :: proc(
         parser_skip(state, self.skip)
 
         if state_eof(state) {
-            return nil, parser_error(SyntaxError, state, "{}: expected '{}', but eof was found.",
+            return nil, syntax_error(state, "{}: expected '{}', but eof was found.",
                                      self.name, self.char)
         }
 
@@ -128,7 +128,7 @@ lit_c :: proc(
             state_save_pos(state)
             return res, nil
         }
-        return nil, parser_error(SyntaxError, state, "{}: expected '{}', but {} was found.",
+        return nil, syntax_error(state, "{}: expected '{}', but {} was found.",
                                  self.name, self.char, state_char(state))
     }
     parser := parser_create(LitCParser, name, parse, skip, exec)
@@ -152,7 +152,7 @@ lit_str :: proc(
         parser_skip(state, self.skip)
         for c in self.str {
             if state_eof(state) || state_char(state) != c {
-                return nil, parser_error(SyntaxError, state, "expected literal `{}`", self.str)
+                return nil, syntax_error(state, "expected literal `{}`", self.str)
             }
             if ok := state_eat_one(state); !ok {
                 return nil, InternalError{"state_eat_one failed."}
@@ -204,7 +204,7 @@ block_char :: proc(
 
         parser_skip(state, self.skip)
         if state_char(state) != opening {
-            return nil, parser_error(SyntaxError, state, "opening symbol not found in `{}({}, {})`.",
+            return nil, syntax_error(state, "opening symbol not found in `{}({}, {})`.",
                                      self.name, opening, closing)
         }
         state_eat_one(state)
@@ -223,7 +223,7 @@ block_char :: proc(
         for len(char_stack) > 0 {
             escaped = false
             if state_eof(state) {
-                return nil, parser_error(SyntaxError, state,
+                return nil, syntax_error(state,
                                          "closing symbol not found in `{}('{}', '{}')`.",
                                          self.name, opening, closing)
             }
@@ -311,7 +311,7 @@ block_str :: proc(
     parse := proc(self: ^Parser, state: ^ParserState) -> (res: ParseResult, err: ParserError) {
         parser_skip(state, self.skip)
         if !cursor_on_string(state, opening) {
-            return nil, parser_error(SyntaxError, state, "opening string not found in `{}({}, {})`.",
+            return nil, syntax_error(state, "opening string not found in `{}({}, {})`.",
                                      self.name, opening, closing)
         }
         state.cur += len(opening)
@@ -322,7 +322,7 @@ block_str :: proc(
 
         for count > 0 {
             if state_eof(state) {
-                return nil, parser_error(SyntaxError, state, "closing string not found in `{}({}, {})`.",
+                return nil, syntax_error(state, "closing string not found in `{}({}, {})`.",
                                          self.name, opening, closing)
             }
             if cursor_on_string(state, closing) {
@@ -429,11 +429,11 @@ separated_items :: proc(
         }
 
         if trailing && !self.allow_trailing_separator {
-            return nil, parser_error(SyntaxError, state, "trailing character found in `{}({})`.",
+            return nil, syntax_error(state, "trailing character found in `{}({})`.",
                                      self.name, self.separator)
         }
         if len(results) == 0 && !self.allow_empty_list {
-            return nil, parser_error(SyntaxError, state, "no items found in `{}({})`.",
+            return nil, syntax_error(state, "no items found in `{}({})`.",
                                      self.name, self.separator)
         }
         res = parser_exec(state, self.exec, results, flags = {.ListResult})

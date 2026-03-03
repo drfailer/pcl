@@ -39,7 +39,7 @@ SKIP: SkipProc = nil
 declare :: proc(name: string = "parser") -> ^Parser {
     parse := proc(self: ^Parser, state: ^ParserState) -> (res: ParseResult, err: ParserError) {
         if len(self.parsers) == 0 || self.parsers[0] == nil {
-            return nil, parser_error(InternalError, state, "unimplemented parser `{}`.", self.name)
+            return nil, internal_error(state, "unimplemented parser `{}`.", self.name)
         }
 
         parser_skip(state, self.skip)
@@ -120,7 +120,7 @@ not :: proc(
         parser_skip(state, self.skip)
         sub_state := state^
         if res, err = parser_parse(&sub_state, self.parsers[0]); err == nil {
-            return nil, SyntaxError{""}
+            return nil, syntax_error(state, "not parser failed.")
         }
         return nil, nil
     }
@@ -137,6 +137,9 @@ opt :: proc(
         parser_skip(state, self.skip)
         sub_state := state^
         if res, err = parser_parse(&sub_state, self.parsers[0]); err != nil {
+            if !parser_can_recover(err) {
+                return nil, err
+            }
             res = ExecResult{"", state.loc}
             return parser_exec_with_child(state, self.exec, res), nil
         }
@@ -176,6 +179,9 @@ or :: proc(
                 state_save_pos(state)
                 return res, nil
             }
+            if !parser_can_recover(sub_err) {
+                return nil, sub_err
+            }
             // in this case, we free all the nodes allocated by the failed parser
             // FIXME: this doesn't work because when a parser fails, it does not return his result
             #partial switch sr in sub_res {
@@ -183,7 +189,7 @@ or :: proc(
             }
             free_all(state.pcl_handle.error_allocator)
         }
-        return nil, parser_error(SyntaxError, state, "none of the rules in `{}` could be applied.", self.name)
+        return nil, syntax_error(state, "none of the rules in `{}` could be applied.", self.name)
     }
     return parser_create(name, parse, skip, exec, create_parser_array(context.allocator, skip, ..inputs))
 }
@@ -202,14 +208,7 @@ seq :: proc(
         for parser, parser_idx in self.parsers {
             parser_skip(&sub_state, self.skip)
             if sub_res, err = parser_parse(&sub_state, parser); err != nil {
-                state_set(state, &sub_state)
-                switch e in err {
-                case InternalError:
-                    return nil, err
-                case SyntaxError:
-                    return nil, parser_error(SyntaxError, state, "{}[{}]: {}",
-                                             self.name, parser_idx, e.message)
-                }
+                return nil, err
             }
             append(&results, sub_res)
             state_set(state, &sub_state)
@@ -233,7 +232,14 @@ star :: proc(
         parser_skip(state, self.skip)
         sub_state := state^
         for !state_eof(state) {
-            sub_res := parser_parse(&sub_state, self.parsers[0]) or_break
+            sub_res, sub_err := parser_parse(&sub_state, self.parsers[0])
+            if sub_err != nil {
+                if parser_can_recover(sub_err) {
+                    break
+                } else {
+                    return nil, sub_err
+                }
+            }
             append(&results, sub_res)
             state_set(state, &sub_state)
         }
@@ -259,7 +265,14 @@ plus :: proc(
         parser_skip(state, self.skip)
         sub_state := state^
         for !state_eof(state) {
-            sub_res := parser_parse(&sub_state, self.parsers[0]) or_break
+            sub_res, sub_err := parser_parse(&sub_state, self.parsers[0])
+            if sub_err != nil {
+                if parser_can_recover(sub_err) {
+                    break
+                } else {
+                    return nil, sub_err
+                }
+            }
             append(&results, sub_res)
             state_set(state, &sub_state)
         }
@@ -268,7 +281,7 @@ plus :: proc(
             state_save_pos(state)
             return res, nil
         }
-        return nil, parser_error(SyntaxError, state, "rule {%s}+ failed.", self.parsers[0].name)
+        return nil, syntax_error(state, "rule {%s}+ failed.", self.parsers[0].name)
     }
     if len(inputs) > 1 {
         return parser_create(name, parse, skip, exec, []^Parser{seq(..inputs, skip = skip)})
@@ -300,7 +313,7 @@ times :: proc(
             state_save_pos(state)
             return res, nil
         }
-        return nil, parser_error(SyntaxError, state, "rule {%s}{%d} failed (%d found)",
+        return nil, syntax_error(state, "rule {%s}{%d} failed (%d found)",
                                  self.parsers[0].name, nb_times, count)
     }
     if len(inputs) > 1 {

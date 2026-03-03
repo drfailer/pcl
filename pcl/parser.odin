@@ -129,7 +129,9 @@ parser_skip :: proc(state: ^ParserState, parser_skip: SkipProc) {
 // errors //////////////////////////////////////////////////////////////////////
 
 SyntaxError :: struct {
+    state: ParserState,
     message: string,
+    fatal: bool,
 }
 
 InternalError :: struct {
@@ -141,9 +143,36 @@ ParserError :: union {
     InternalError,
 }
 
-parser_error :: proc($error_type: typeid, state: ^ParserState, str: string, args: ..any) -> ParserError {
-    return error_type{
+internal_error :: proc(state: ^ParserState, str: string, args: ..any) -> ParserError {
+    return InternalError{
         fmt.aprintf(str, ..args, allocator = state.pcl_handle.error_allocator)
+    }
+}
+
+syntax_error :: proc(state: ^ParserState, str: string, args: ..any, fatal := false) -> ParserError {
+    return SyntaxError{
+        state^,
+        fmt.aprintf(str, ..args, allocator = state.pcl_handle.error_allocator),
+        fatal,
+    }
+}
+
+parser_can_recover :: proc(error: ParserError) -> bool {
+    switch e in error {
+    case InternalError: return false
+    case SyntaxError: return e.fatal == false
+    }
+    return true
+}
+
+parser_error_report :: proc(error: ParserError) {
+    switch e in error {
+    case SyntaxError:
+        fmt.printfln("syntax error: {}", e.message)
+        state := e.state
+        state_print_context(&state)
+    case InternalError:
+        fmt.printfln("internal error: {}", e.message)
     }
 }
 

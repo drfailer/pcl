@@ -84,13 +84,7 @@ parse_string :: proc(
 
     ok = true
     if err != nil {
-        switch e in err {
-        case SyntaxError:
-            fmt.printfln("syntax error: {}", e.message)
-            state_print_context(&state)
-        case InternalError:
-            fmt.printfln("internal error: {}", e.message)
-        }
+        parser_error_report(err)
         ok = false
     } else if !state_eof(&state) {
         fmt.printfln("syntax error: the parser did not consume all the string.")
