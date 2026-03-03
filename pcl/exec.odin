@@ -313,3 +313,24 @@ result :: proc(data: ^ExecData, value: $T) -> ExecResult {
 no_result :: proc(data: ^ExecData) -> ExecResult {
     return ExecResult{cast(rawptr)nil, data.state.loc}
 }
+
+result_print :: proc(result: ExecResult) {
+    switch data in result.data {
+    case (string): fmt.printf("\"{}\" ", data)
+    case (rawptr): fmt.print(data)
+    case (uint): fmt.printf("val:{} ", data)
+    case ([dynamic]ExecResult):
+        fmt.print("[ ")
+        for sub_result in data {
+            result_print(sub_result)
+            fmt.print(" ")
+        }
+        fmt.print("]")
+    }
+}
+
+content_print :: proc(data: ^ExecData) {
+    for result in data.content {
+        result_print(result)
+    }
+}
