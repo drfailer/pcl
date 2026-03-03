@@ -279,7 +279,6 @@ block_char :: proc(
                 if char_stack[len(char_stack) - 1] == closing_char {
                     pop(&char_stack)
                     end_cur = sub_state.cur
-                } else {
                 }
             } else if state_char(&sub_state) == opening_char {
                 append(&char_stack, closing_char)
