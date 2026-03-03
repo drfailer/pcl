@@ -141,14 +141,27 @@ content_len :: proc{
 }
 
 @(private)
-content_cast_value :: proc($T: typeid, result: ExecResult, loc := #caller_location) -> T {
+content_cast_value :: proc($T: typeid, result: ExecResult, loc := #caller_location) -> (value: T) {
     when intrinsics.type_is_pointer(T) {
-        return cast(T)result.data.(rawptr)
+        ptr, ok := result.data.(rawptr)
+        if !ok {
+            fmt.println(loc, "error: cannot create pointer value.")
+        }
+        value = cast(T)ptr
     } else when size_of(T) <= size_of(uint) {
-        return transmute(T)result.data.(uint)
+        i, ok := result.data.(uint)
+        if !ok {
+            fmt.println(loc, "error: cannot create register size value.")
+        }
+        value = transmute(T)i
     } else {
-        return (cast(^T)result.data.(rawptr))^
+        ptr, ok := result.data.(rawptr)
+        if !ok {
+            fmt.println(loc, "error: cannot create value.")
+        }
+        value = (cast(^T)ptr)^
     }
+    return value
 }
 
 @(private)
@@ -177,14 +190,14 @@ get_result_at_idx :: proc{
 
 content_value_from_result :: proc(result: ExecResult, $T: typeid, indexes: ..int, loc := #caller_location) -> T {
     if len(indexes) == 0 {
-        return content_cast_value(T, result)
+        return content_cast_value(T, result, loc)
     }
     return content_value_from_result(get_result_at_idx(result, indexes[0], loc), T, ..indexes[1:], loc = loc)
 }
 
 content_value_from_data :: proc(data: ^ExecData, $T: typeid, indexes: ..int, loc := #caller_location) -> T {
     if len(indexes) == 0 {
-        return content_cast_value(T, data.content[0])
+        return content_cast_value(T, data.content[0], loc)
     }
     return content_value_from_result(get_result_at_idx(data, indexes[0], loc), T, ..indexes[1:], loc = loc)
 }
