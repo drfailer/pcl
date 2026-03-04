@@ -154,10 +154,10 @@ opt :: proc(
             if !parser_can_recover(err) {
                 return nil, err
             }
+            free_all(state.pcl_handle.error_allocator)
             res = ExecResult{"", state.loc}
             return parser_exec_with_child(state, self.exec, res), nil
         }
-        free_all(state.pcl_handle.error_allocator)
         state_pre_exec(state, pos, sub_state.cur, loc)
         res = parser_exec(state, self.exec, res)
         state_post_exec(state, sub_state.loc)
@@ -293,9 +293,9 @@ plus :: proc(
                 }
             }
             append(&results, sub_res)
-            sub_state.cur = tmp_sub_state.cur
+            sub_state = tmp_sub_state
         }
-        if sub_state.cur > sub_state.pos {
+        if sub_state.cur > pos {
             state_pre_exec(state, pos, sub_state.cur, loc)
             res = parser_exec(state, self.exec, results, flags = {.ListResult})
             state_post_exec(state, sub_state.loc)

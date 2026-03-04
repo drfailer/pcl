@@ -380,7 +380,7 @@ line_starting_with :: proc(
         for !state_eof(&sub_state) && state_char(&sub_state) != '\n' {
             state_eat_one(&sub_state)
         }
-        state_eat_one(&sub_state)
+        state_eat_one(&sub_state) // eat the '\n' (does nothing if eof)
 
         // exec
         state_pre_exec(state, pos, sub_state.cur, loc)
