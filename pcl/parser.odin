@@ -192,69 +192,10 @@ parser_exec_with_childs :: proc(
 ) -> ParseResult {
     loc := state.loc
     pr: ParseResult
-
-    // fmt.printfln("rec depth = {}, branch depth = {}", state.pcl_handle.rd.depth, state.pcl_handle.branch_depth)
-    if state.pcl_handle.rd.depth == 0 && state.pcl_handle.branch_depth == 0 {
-        if len(childs) == 0 {
-            if exec == nil {
-                if .ListResult not_in flags {
-                    pr = ExecResult{state_string(state), loc}
-                } else {
-                    pr = ExecResult{
-                        make([dynamic]ExecResult, allocator = state.pcl_handle.exec_allocator),
-                        loc,
-                    }
-                }
-            } else {
-                pr = exec(&ExecData{
-                    state = state,
-                    content = []ExecResult{ExecResult{state_string(state), loc}},
-                    user_data = state.pcl_handle.user_data,
-                    allocator = state.pcl_handle.exec_allocator,
-                })
-            }
-        } else {
-            childs_results := make([dynamic]ExecResult, allocator = state.pcl_handle.exec_allocator)
-
-            for child in childs {
-                switch c in child {
-                case (^ExecTreeNode):
-                    if child != nil {
-                        append(&childs_results, exec_tree_exec(
-                                      c,
-                                      state.pcl_handle.user_data,
-                                      state.pcl_handle.exec_allocator,
-                                      &state.pcl_handle.exec_node_pool,
-                                      ))
-                    }
-                case (ExecResult):
-                    append(&childs_results, c)
-                }
-            }
-
-            if exec == nil {
-                if .ListResult not_in flags && len(childs_results) == 1 {
-                    pr = childs_results[0]
-                    delete(childs_results)
-                } else {
-                    pr = ExecResult{childs_results, loc}
-                }
-            } else {
-                pr = exec(&ExecData{
-                    state = state,
-                    content = childs_results[:],
-                    user_data = state.pcl_handle.user_data,
-                    allocator = state.pcl_handle.exec_allocator,
-                })
-                delete(childs_results)
-            }
-        }
-    } else {
-        pr = memory_pool_allocate(&state.pcl_handle.exec_node_pool)
-        pr.(^ExecTreeNode).ctx = ExecContext{exec, state^}
-        pr.(^ExecTreeNode).flags = flags
-        pr.(^ExecTreeNode).childs = childs
-    }
+    pr = memory_pool_allocate(&state.pcl_handle.exec_node_pool)
+    pr.(^ExecTreeNode).ctx = ExecContext{exec, state^}
+    pr.(^ExecTreeNode).flags = flags
+    pr.(^ExecTreeNode).childs = childs
     return pr
 }
 
