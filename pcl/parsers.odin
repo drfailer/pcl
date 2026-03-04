@@ -211,7 +211,7 @@ block_char :: proc(
         char_stack: [dynamic]rune
         defer delete(char_stack)
 
-        if state_char(&sub_state) != opening {
+        if state_eof(&sub_state) || state_char(&sub_state) != opening {
             return nil, syntax_error(state, "opening symbol not found in `{}({}, {})`.",
                                      self.name, opening, closing)
         }
@@ -240,6 +240,12 @@ block_char :: proc(
                 state_eat_one(&sub_state)
                 state_eat_one(&sub_state)
                 continue
+            }
+
+            if state_eof(&sub_state) {
+                return nil, syntax_error(state,
+                                         "closing symbol not found in `{}('{}', '{}')`.",
+                                         self.name, opening, closing)
             }
 
             switch state_char(&sub_state) {
@@ -425,7 +431,7 @@ separated_items :: proc(
             trailing = false
 
             parser_skip(&sub_state, self.skip)
-            if state_char(&sub_state) != self.separator {
+            if state_eof(&sub_state) || state_char(&sub_state) != self.separator {
                 break
             }
             state_eat_one(&sub_state)
