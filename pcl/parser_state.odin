@@ -37,6 +37,8 @@ state_leave_branch :: proc(state: ^ParserState) {
     state.pcl_handle.branch_depth -= 1
 }
 
+// TODO: remove vvvvvvvvvv
+
 state_set_cur :: proc(dest: ^ParserState, src: ^ParserState) {
     dest.cur = src.cur
 }
@@ -44,6 +46,19 @@ state_set_cur :: proc(dest: ^ParserState, src: ^ParserState) {
 state_set_pos :: proc(dest: ^ParserState, src: ^ParserState) {
     dest.pos = src.cur
     dest.loc = src.loc
+}
+
+// TODO: remove ^^^^^^^^^^
+
+state_pre_exec :: proc(state: ^ParserState, pos, cur: int, loc: Location) {
+    state.pos = pos
+    state.cur = cur
+    state.loc = loc
+}
+
+state_post_exec :: proc(state: ^ParserState, loc: Location) {
+    state.pos = state.cur
+    state.loc = loc
 }
 
 state_create :: proc(content: ^string, pcl_handle: ^PCLHandle) -> ParserState {

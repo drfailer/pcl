@@ -2,6 +2,7 @@ package line
 
 import "pcl:pcl"
 import "core:fmt"
+import "core:log"
 import "core:testing"
 
 skip :: proc(c: rune) -> bool {

@@ -115,14 +115,15 @@ parser_parse :: proc(state: ^ParserState, parser: ^Parser) -> (res: ParseResult,
     return parser->parse(state)
 }
 
-parser_skip :: proc(state: ^ParserState, parser_skip: SkipProc) {
+parser_skip :: proc(state: ^ParserState, parser_skip: SkipProc) -> (pos: int, loc: Location) {
     if parser_skip == nil {
-        return
+        return state.pos, state.loc
     }
     for !state_eof(state) && parser_skip(state_char(state)) {
         state_eat_one(state) or_break
     }
     state.pos = state.cur
+    return state.pos, state.loc
 }
 
 // errors //////////////////////////////////////////////////////////////////////
