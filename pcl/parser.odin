@@ -115,21 +115,23 @@ parser_parse :: proc(state: ^ParserState, parser: ^Parser) -> (res: ParseResult,
     return parser->parse(state)
 }
 
-parser_skip :: proc(state: ^ParserState, parser_skip: SkipProc) {
+parser_skip :: proc(state: ^ParserState, parser_skip: SkipProc) -> (pos: int, loc: Location) {
     if parser_skip == nil {
-        return
+        return state.pos, state.loc
     }
-    state := state
     for !state_eof(state) && parser_skip(state_char(state)) {
         state_eat_one(state) or_break
     }
-    state_save_pos(state)
+    state.pos = state.cur
+    return state.pos, state.loc
 }
 
 // errors //////////////////////////////////////////////////////////////////////
 
 SyntaxError :: struct {
+    state: ParserState,
     message: string,
+    fatal: bool,
 }
 
 InternalError :: struct {
@@ -141,9 +143,42 @@ ParserError :: union {
     InternalError,
 }
 
-parser_error :: proc($error_type: typeid, state: ^ParserState, str: string, args: ..any) -> ParserError {
-    return error_type{
+internal_error :: proc(state: ^ParserState, str: string, args: ..any) -> ParserError {
+    return InternalError{
         fmt.aprintf(str, ..args, allocator = state.pcl_handle.error_allocator)
+    }
+}
+
+syntax_error :: proc(state: ^ParserState, str: string, args: ..any, fatal := false) -> ParserError {
+    return SyntaxError{
+        state^,
+        fmt.aprintf(str, ..args, allocator = state.pcl_handle.error_allocator),
+        fatal,
+    }
+}
+
+parser_fatal_error :: proc(error: ^ParserError) {
+    #partial switch &e in error {
+    case (SyntaxError): e.fatal = true
+    }
+}
+
+parser_can_recover :: proc(error: ParserError) -> bool {
+    switch e in error {
+    case InternalError: return false
+    case SyntaxError: return e.fatal == false
+    }
+    return true
+}
+
+parser_error_report :: proc(error: ParserError) {
+    switch e in error {
+    case SyntaxError:
+        fmt.printfln("syntax error: {}", e.message)
+        state := e.state
+        state_print_context(&state)
+    case InternalError:
+        fmt.printfln("internal error: {}", e.message)
     }
 }
 
@@ -157,69 +192,10 @@ parser_exec_with_childs :: proc(
 ) -> ParseResult {
     loc := state.loc
     pr: ParseResult
-
-    // fmt.printfln("rec depth = {}, branch depth = {}", state.pcl_handle.rd.depth, state.pcl_handle.branch_depth)
-    if state.pcl_handle.rd.depth == 0 && state.pcl_handle.branch_depth == 0 {
-        if len(childs) == 0 {
-            if exec == nil {
-                if .ListResult not_in flags {
-                    pr = ExecResult{state_string(state), loc}
-                } else {
-                    pr = ExecResult{
-                        make([dynamic]ExecResult, allocator = state.pcl_handle.exec_allocator),
-                        loc,
-                    }
-                }
-            } else {
-                pr = exec(&ExecData{
-                    state = state,
-                    content = []ExecResult{ExecResult{state_string(state), loc}},
-                    user_data = state.pcl_handle.user_data,
-                    allocator = state.pcl_handle.exec_allocator,
-                })
-            }
-        } else {
-            childs_results := make([dynamic]ExecResult, allocator = state.pcl_handle.exec_allocator)
-
-            for child in childs {
-                switch c in child {
-                case (^ExecTreeNode):
-                    if child != nil {
-                        append(&childs_results, exec_tree_exec(
-                                      c,
-                                      state.pcl_handle.user_data,
-                                      state.pcl_handle.exec_allocator,
-                                      &state.pcl_handle.exec_node_pool,
-                                      ))
-                    }
-                case (ExecResult):
-                    append(&childs_results, c)
-                }
-            }
-
-            if exec == nil {
-                if .ListResult not_in flags && len(childs_results) == 1 {
-                    pr = childs_results[0]
-                    delete(childs_results)
-                } else {
-                    pr = ExecResult{childs_results, loc}
-                }
-            } else {
-                pr = exec(&ExecData{
-                    state = state,
-                    content = childs_results[:],
-                    user_data = state.pcl_handle.user_data,
-                    allocator = state.pcl_handle.exec_allocator,
-                })
-                delete(childs_results)
-            }
-        }
-    } else {
-        pr = memory_pool_allocate(&state.pcl_handle.exec_node_pool)
-        pr.(^ExecTreeNode).ctx = ExecContext{exec, state^}
-        pr.(^ExecTreeNode).flags = flags
-        pr.(^ExecTreeNode).childs = childs
-    }
+    pr = memory_pool_allocate(&state.pcl_handle.exec_node_pool)
+    pr.(^ExecTreeNode).ctx = ExecContext{exec, state^}
+    pr.(^ExecTreeNode).flags = flags
+    pr.(^ExecTreeNode).childs = childs
     return pr
 }
 

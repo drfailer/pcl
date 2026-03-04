@@ -7,8 +7,7 @@ import "base:intrinsics"
 /*
  * The purpose of PCL is not to build an AST in which nodes are elements of the
  * grammar. Instead, PCL builds a tree of execution context that allow to call
- * user callback functions during the parsing. The tree is only built when the
- * parser is in a branch or a left recursive rule.
+ * user callback functions during the parsing.
  */
 
 ExecFlag :: enum {
@@ -73,7 +72,6 @@ exec_tree_exec :: proc(
  */
 exec_tree_node_exec :: proc(node: ^ExecTreeNode, exec_data: ^ExecData) -> ExecResult {
     loc := node.ctx.state.loc
-    exec_data.state = &node.ctx.state
     // release the node once the execution is done
     defer memory_pool_release(exec_data.node_pool, node)
 
@@ -110,11 +108,13 @@ exec_tree_node_exec :: proc(node: ^ExecTreeNode, exec_data: ^ExecData) -> ExecRe
             return ExecResult{childs_results, loc}
         } else {
             exec_data.content = childs_results[:]
+            exec_data.state = &node.ctx.state
             result := node.ctx.exec(exec_data)
             delete(childs_results)
             return result
         }
     }
+    exec_data.state = &node.ctx.state
     return node.ctx.exec(exec_data)
 }
 
@@ -254,6 +254,10 @@ contents :: proc {
     contents_from_result,
 }
 
+content_string :: proc(data: ^ExecData) -> string {
+    return state_string(data.state)
+}
+
 result_has_content :: proc(result: ExecResult, indexes: ..int, loc := #caller_location) -> bool {
     if len(indexes) == 0 {
         switch data in result.data {
@@ -298,11 +302,13 @@ content_location :: proc {
     content_location_from_result,
 }
 
-result :: proc(data: ^ExecData, value: $T) -> ExecResult {
+result_from_value :: proc(data: ^ExecData, value: $T) -> ExecResult {
     when intrinsics.type_is_pointer(T) {
         return ExecResult{cast(rawptr)value, data.state.loc}
     } else when size_of(T) <= size_of(uint) {
         return ExecResult{transmute(uint)value, data.state.loc}
+    } else when intrinsics.type_is_string(T) {
+        return ExecResult{value, data.state.loc}
     } else {
         copy := new(T, allocator = data.allocator) // TODO: this allocator is for the nodes, we need a temporary allocator here and we need to be able to free the data
         copy^ = value
@@ -310,6 +316,40 @@ result :: proc(data: ^ExecData, value: $T) -> ExecResult {
     }
 }
 
+result_from_data :: proc(data: ^ExecData) -> ExecResult {
+    childs_results := make([dynamic]ExecResult, allocator = data.allocator)
+    for result in data.content {
+        append(&childs_results, result)
+    }
+    return ExecResult{childs_results, data.state.loc}
+}
+
+result :: proc{
+    result_from_value,
+    result_from_data,
+}
+
 no_result :: proc(data: ^ExecData) -> ExecResult {
     return ExecResult{cast(rawptr)nil, data.state.loc}
+}
+
+result_print :: proc(result: ExecResult) {
+    switch data in result.data {
+    case (string): fmt.printf("\"{}\" ", data)
+    case (rawptr): fmt.print(data)
+    case (uint): fmt.printf("val:{} ", data)
+    case ([dynamic]ExecResult):
+        fmt.print("[ ")
+        for sub_result in data {
+            result_print(sub_result)
+            fmt.print(" ")
+        }
+        fmt.print("]")
+    }
+}
+
+content_print :: proc(data: ^ExecData) {
+    for result in data.content {
+        result_print(result)
+    }
 }

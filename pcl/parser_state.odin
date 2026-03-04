@@ -37,9 +37,15 @@ state_leave_branch :: proc(state: ^ParserState) {
     state.pcl_handle.branch_depth -= 1
 }
 
-state_set :: proc(dest: ^ParserState, src: ^ParserState) {
-    dest.loc = src.loc
-    dest.cur = src.cur
+state_pre_exec :: proc(state: ^ParserState, pos, cur: int, loc: Location) {
+    state.pos = pos
+    state.cur = cur
+    state.loc = loc
+}
+
+state_post_exec :: proc(state: ^ParserState, loc: Location) {
+    state.pos = state.cur
+    state.loc = loc
 }
 
 state_create :: proc(content: ^string, pcl_handle: ^PCLHandle) -> ParserState {
@@ -60,18 +66,15 @@ state_eat_one :: proc(state: ^ParserState) -> (ok: bool) {
     if state_char(state) == '\n' {
         state.loc.row += 1
         state.loc.col = 1
+    } else {
+        state.loc.col += 1
     }
     state.cur += 1
-    state.loc.col += 1
     return true
 }
 
 state_eof :: proc(state: ^ParserState) -> bool {
     return state.cur >= len(state.content^)
-}
-
-state_save_pos :: proc(state: ^ParserState) {
-    state.pos = state.cur
 }
 
 state_char_at :: proc(state: ^ParserState, idx: int) -> rune {
