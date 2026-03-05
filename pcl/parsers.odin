@@ -6,7 +6,7 @@ package pcl
 
 import "core:fmt"
 import "core:log"
-import "core:text/regex"
+import "core:strings"
 
 // characters and string literals //////////////////////////////////////////////
 
