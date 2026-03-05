@@ -1,6 +1,7 @@
 package pcl
 
 import "core:fmt"
+import "core:log"
 import "core:strings"
 import "core:slice"
 import "core:mem"
@@ -28,6 +29,16 @@ create_parser_array :: proc(allocator: mem.Allocator, skip: SkipCtx, inputs: ..C
         }
     }
     return array
+}
+
+release_result :: proc(state: ^ParserState, result: ParseResult) {
+    release_exec_tree(&state.pcl_handle.exec_node_pool, result)
+}
+
+release_results :: proc(state: ^ParserState, results: []ParseResult) {
+    #reverse for result in results {
+        release_exec_tree(&state.pcl_handle.exec_node_pool, result)
+    }
 }
 
 // combinators /////////////////////////////////////////////////////////////////
@@ -120,6 +131,7 @@ single :: proc(
     return parser_create(name, parse, skip, exec, create_parser_array(context.allocator, skip, input))
 }
 
+// TODO(NO_EXEC exec flag): add an exec flag to avoid allocating the exec tree!
 not :: proc(
     input: CombinatorInput,
     skip: SkipCtx = SKIP,
@@ -131,6 +143,7 @@ not :: proc(
         if res, err = parser_parse(&sub_state, self.parsers[0]); err == nil {
             return nil, syntax_error(state, "not parser failed.")
         }
+        release_result(state, res) // TODO(NO_EXEC exec flag): this should not be required
         return nil, nil
     }
     return parser_create(name, parse, skip, nil, create_parser_array(context.allocator, skip, input))
@@ -193,11 +206,6 @@ or :: proc(
             if !parser_can_recover(sub_err) {
                 return nil, sub_err
             }
-            // in this case, we free all the nodes allocated by the failed parser
-            // FIXME: this doesn't work because when a parser fails, it does not return his result
-            #partial switch sr in sub_res {
-            case (^ExecTreeNode): memory_pool_release_from_root(&state.pcl_handle.exec_node_pool, sr)
-            }
             free_all(state.pcl_handle.error_allocator)
         }
         return nil, syntax_error(state, "none of the rules in `{}` could be applied.", self.name)
@@ -220,6 +228,7 @@ seq :: proc(
         for parser, parser_idx in self.parsers {
             parser_skip(&sub_state, self.skip)
             if sub_res, err = parser_parse(&sub_state, parser); err != nil {
+                release_results(state, results[:])
                 return nil, err
             }
             append(&results, sub_res)
@@ -250,6 +259,7 @@ star :: proc(
                 if parser_can_recover(sub_err) {
                     break
                 } else {
+                    release_results(state, results[:])
                     return nil, sub_err
                 }
             }
@@ -285,6 +295,7 @@ plus :: proc(
                 if parser_can_recover(sub_err) {
                     break
                 } else {
+                    release_results(state, results[:])
                     return nil, sub_err
                 }
             }
@@ -329,6 +340,7 @@ times :: proc(
             state_post_exec(state, sub_state.loc)
             return res, nil
         }
+        release_results(state, results[:])
         return nil, syntax_error(state, "rule {%s}{%d} failed (%d found)",
                                  self.parsers[0].name, nb_times, count)
     }
@@ -363,6 +375,7 @@ combine :: proc(
         if res, err = parser_parse(&sub_state, self.parsers[0]); err != nil {
             return nil, err
         }
+        release_result(state, res) // TODO(NO_EXEC exec flag): this should not be necessary
         state_pre_exec(state, pos, sub_state.cur, loc)
         res = parser_exec(state, self.exec)
         state_post_exec(state, sub_state.loc)
@@ -374,6 +387,11 @@ combine :: proc(
     return parser_create(name, parse, skip, exec, create_parser_array(context.allocator, skip, ..inputs))
 }
 
+
+// TODO: the left recursion will be rewritten (it allocates to many nodes + we
+// shouldn't use recursion in it to make things easier to optimize)
+
+// reset the top nodes for left recursive grammars
 rec :: proc(parser: ^Parser) -> ^Parser {
     parse := proc(self: ^Parser, state: ^ParserState) -> (res: ParseResult, err: ParserError) {
         recursive_rule := self.parsers[0]
@@ -429,7 +447,7 @@ lrec :: proc(
         terminal_rule := self.parsers[len(self.parsers) - 1]
         middle_rules := self.parsers[1:len(self.parsers) - 1]
         sub_state := state^
-        pos, loc := parser_skip(state, self.skip)
+        pos, loc := parser_skip(&sub_state, self.skip)
 
         if res, err = parser_parse(&sub_state, terminal_rule); err != nil {
             return nil, err
@@ -456,6 +474,8 @@ lrec :: proc(
         for parser, idx in middle_rules {
             parser_skip(&sub_state, self.skip)
             if res, err = parser_parse(&sub_state, parser); err != nil {
+                delete(childs)
+                release_results(state, childs[:idx])
                 return nil, err
             }
             childs[1 + idx] = res
@@ -469,6 +489,7 @@ lrec :: proc(
 
         // apply recursive rule
         if res, err = parser_parse(state, recursive_rule); err != nil {
+            release_result(state, res)
             return nil, err
         }
 
