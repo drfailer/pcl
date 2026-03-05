@@ -34,7 +34,7 @@ that it will work in every cases, but it here :D.
 arithmetic_expr_grammar :: proc() -> ^pcl.Parser {
     using pcl
 
-    pcl.SKIP = skip_spaces
+    pcl.SKIP = skip_any_of(" \n")
 
     // pre-declare the expression parser (because of the recursion)
     expr := declare(name = "expr")
