@@ -121,9 +121,9 @@ exec_object_end :: proc(data: ^pcl.ExecData) -> pcl.ExecResult {
 
 number_grammar :: proc() -> ^pcl.Parser {
     using pcl
-    digits := plus(range('0', '9', skip = nil), skip = nil, name = "digits")
+    digits := plus(range('0', '9'), name = "digits")
     ints := combine(digits, name = "ints", exec = exec_number(i32))
-    floats := combine(seq(digits, lit('.'), opt(digits)), skip = nil, name = "floats", exec = exec_number(f32))
+    floats := combine(seq(digits, lit('.'), opt(digits)), name = "floats", exec = exec_number(f32))
     return or(floats, ints)
 }
 
@@ -132,13 +132,14 @@ json_grammar :: proc(allocator: pcl.ParserAllocator) -> ^pcl.Parser {
 
     context.allocator = allocator
 
-    pcl.SKIP = proc(char: rune) -> bool { return u8(char) == ' ' || u8(char) == '\n' }
+    number := number_grammar()
+
+    pcl.SKIP = skip_any_of(" \n")
 
     json_object := declare(name = "json_object")
 
     value      := declare(name = "value")
     values     := seq(star(value, ','), value)
-    number     := single(number_grammar())
     jstring    := block("\"", "\"", exec = exec_string)
     list_start := lit('[', exec = exec_list_start)
     list_end   := lit(']', exec = exec_list_end)

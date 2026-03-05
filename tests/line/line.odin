@@ -5,10 +5,6 @@ import "core:fmt"
 import "core:log"
 import "core:testing"
 
-skip :: proc(c: rune) -> bool {
-    return c == ' ' || c == '\n'
-}
-
 @(test)
 doxygen :: proc(t: ^testing.T) {
     pcl_handle := pcl.handle_create()
@@ -19,7 +15,7 @@ doxygen :: proc(t: ^testing.T) {
 
     {
         context.allocator = parser_allocator
-        pcl.SKIP = skip
+        pcl.SKIP = pcl.skip_any_of(" \n")
         parser = pcl.star(pcl.line_starting_with("///"))
     }
 

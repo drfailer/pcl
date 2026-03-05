@@ -3,6 +3,8 @@ package pcl
 import "core:mem"
 import "core:log"
 
+// memory pool /////////////////////////////////////////////////////////////////
+
 // The current memory pool implementation is not thread safe. If at some point
 // PCL supports mutli-threading, the pool should have a mutex.
 
@@ -113,4 +115,17 @@ memory_pool_release_from_root :: proc(pool: ^MemoryPool($T), root_data: ^T) {
     pool.used_nodes = node.next
     node.next = pool.free_nodes
     pool.free_nodes = head_node
+}
+
+// parsing utilities ///////////////////////////////////////////////////////////
+
+cursor_on_string :: proc(state: ^ParserState, $prefix: string) -> bool {
+    state_idx := state.cur
+    for c, idx in prefix {
+        if state_idx > len(state.content) || state_char_at(state, state_idx) != c {
+            return false
+        }
+        state_idx += 1
+    }
+    return true
 }

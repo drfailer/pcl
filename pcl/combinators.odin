@@ -14,7 +14,7 @@ CombinatorInput :: union {
 }
 
 @(private="package")
-create_parser_array :: proc(allocator: mem.Allocator, skip: SkipProc, inputs: ..CombinatorInput) -> [dynamic]^Parser {
+create_parser_array :: proc(allocator: mem.Allocator, skip: SkipCtx, inputs: ..CombinatorInput) -> [dynamic]^Parser {
     array := make([dynamic]^Parser, allocator = allocator)
 
     for input in inputs {
@@ -30,10 +30,6 @@ create_parser_array :: proc(allocator: mem.Allocator, skip: SkipProc, inputs: ..
     return array
 }
 
-// configuration varibles //////////////////////////////////////////////////////
-
-SKIP: SkipProc = nil
-
 // combinators /////////////////////////////////////////////////////////////////
 
 declare :: proc(name: string = "parser") -> ^Parser {
@@ -48,13 +44,13 @@ declare :: proc(name: string = "parser") -> ^Parser {
         }
         return res, nil
     }
-    return parser_create(name, parse, nil, nil, []^Parser{nil})
+    return parser_create(name, parse, NO_SKIP, nil, []^Parser{nil})
 }
 
 define :: proc(
     parser: ^Parser,
     impl: ^Parser,
-    skip: SkipProc = SKIP,
+    skip: SkipCtx = SKIP,
     exec: ExecProc = nil,
 ) {
     if len(parser.parsers) == 0 {
@@ -73,7 +69,7 @@ define :: proc(
 
 parser :: proc(
     rule: ^Parser,
-    skip: SkipProc = SKIP,
+    skip: SkipCtx = SKIP,
     exec: ExecProc = nil,
     name: string = "single",
 ) -> ^Parser {
@@ -93,7 +89,7 @@ expect :: proc(parser: CombinatorInput) -> ^Parser {
         }
         return res, err
     }
-    return parser_create("", parse, nil, nil, create_parser_array(context.allocator, nil, parser))
+    return parser_create("", parse, NO_SKIP, nil, create_parser_array(context.allocator, NO_SKIP, parser))
 }
 
 empty :: proc() -> ^Parser {
@@ -105,7 +101,7 @@ empty :: proc() -> ^Parser {
 
 single :: proc(
     input: CombinatorInput,
-    skip: SkipProc = SKIP,
+    skip: SkipCtx = SKIP,
     exec: ExecProc = nil,
     name: string = "single",
 ) -> ^Parser {
@@ -126,7 +122,7 @@ single :: proc(
 
 not :: proc(
     input: CombinatorInput,
-    skip: SkipProc = SKIP,
+    skip: SkipCtx = SKIP,
     name: string = "not",
 ) -> ^Parser {
     parse := proc(self: ^Parser, state: ^ParserState) -> (res: ParseResult, err: ParserError) {
@@ -142,7 +138,7 @@ not :: proc(
 
 opt :: proc(
     input: CombinatorInput,
-    skip: SkipProc = SKIP,
+    skip: SkipCtx = SKIP,
     exec: ExecProc = nil,
     name: string = "opt",
 ) -> ^Parser {
@@ -173,7 +169,7 @@ opt :: proc(
  */
 or :: proc(
     inputs: ..CombinatorInput,
-    skip: SkipProc = SKIP,
+    skip: SkipCtx = SKIP,
     exec: ExecProc = nil,
     name: string = "or",
 ) -> ^Parser {
@@ -211,7 +207,7 @@ or :: proc(
 
 seq :: proc(
     inputs: ..CombinatorInput,
-    skip: SkipProc = SKIP,
+    skip: SkipCtx = SKIP,
     exec: ExecProc = nil,
     name: string = "seq",
 ) -> ^Parser {
@@ -238,7 +234,7 @@ seq :: proc(
 
 star :: proc(
     inputs: ..CombinatorInput,
-    skip: SkipProc = SKIP,
+    skip: SkipCtx = SKIP,
     exec: ExecProc = nil,
     name: string = "star",
 ) -> ^Parser {
@@ -273,7 +269,7 @@ star :: proc(
 
 plus :: proc(
     inputs: ..CombinatorInput,
-    skip: SkipProc = SKIP,
+    skip: SkipCtx = SKIP,
     exec: ExecProc = nil,
     name: string = "plus",
 ) -> ^Parser {
@@ -312,7 +308,7 @@ plus :: proc(
 times :: proc(
     $nb_times: int,
     inputs: ..CombinatorInput,
-    skip: SkipProc = SKIP,
+    skip: SkipCtx = SKIP,
     exec: ExecProc = nil,
     name: string = "times",
 ) -> ^Parser {
@@ -356,7 +352,7 @@ times :: proc(
  */
 combine :: proc(
     inputs: ..CombinatorInput,
-    skip: SkipProc = SKIP,
+    skip: SkipCtx = SKIP,
     exec: ExecProc = nil,
     name: string = "single",
 ) -> ^Parser {
@@ -394,7 +390,7 @@ rec :: proc(parser: ^Parser) -> ^Parser {
         }
         return res, nil
     }
-    return parser_create("", parse, nil, nil, []^Parser{parser})
+    return parser_create("", parse, NO_SKIP, nil, []^Parser{parser})
 }
 
 /*
@@ -421,7 +417,7 @@ rec :: proc(parser: ^Parser) -> ^Parser {
  */
 lrec :: proc(
     inputs: ..CombinatorInput,
-    skip: SkipProc = SKIP,
+    skip: SkipCtx = SKIP,
     exec: ExecProc = nil,
     name: string = "lrec",
 ) -> ^Parser {

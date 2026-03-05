@@ -150,9 +150,9 @@ exec_object :: proc(data: ^pcl.ExecData) -> pcl.ExecResult {
 
 number_grammar :: proc() -> ^pcl.Parser {
     using pcl
-    digits := plus(range('0', '9', skip = nil), skip = nil, name = "digits")
+    digits := plus(range('0', '9'), name = "digits")
     ints := combine(digits, name = "ints", exec = exec_number(i32))
-    floats := combine(seq(digits, lit('.'), opt(digits)), skip = nil, name = "floats", exec = exec_number(f32))
+    floats := combine(seq(digits, lit('.'), opt(digits)), name = "floats", exec = exec_number(f32))
     return or(floats, ints)
 }
 
@@ -162,9 +162,13 @@ json_grammar :: proc(allocator: mem.Allocator) -> ^pcl.Parser {
     // parser constructors use the context allocator
     context.allocator = allocator
 
+    // token rules (no skip)
+
+    number  := number_grammar()
+
     // skip
 
-    pcl.SKIP = proc(char: rune) -> bool { return u8(char) == ' ' || u8(char) == '\n' }
+    pcl.SKIP = skip_any_of(" \n")
 
     //grammar definition
 
@@ -172,7 +176,6 @@ json_grammar :: proc(allocator: mem.Allocator) -> ^pcl.Parser {
 
     value   := declare(name = "value")
     values  := separated_items(value, ',', allow_empty_list = false, exec = exec_values)
-    number  := single(number_grammar())
     jstring := block('"', '"', exec = exec_string)
     list    := seq('[', opt(values), ']', name = "list", exec = exec_list)
     define(value, or(list, number, jstring, json_object))

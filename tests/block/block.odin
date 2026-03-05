@@ -4,10 +4,6 @@ import "pcl:pcl"
 import "core:fmt"
 import "core:testing"
 
-skip :: proc(c: rune) -> bool {
-    return c == ' ' || c == '\n'
-}
-
 @(test)
 test_bracket :: proc(t: ^testing.T) {
     pcl_handle := pcl.handle_create()
@@ -18,7 +14,7 @@ test_bracket :: proc(t: ^testing.T) {
 
     {
         context.allocator = parser_allocator
-        pcl.SKIP = skip
+        pcl.SKIP = pcl.skip_any_of(" \n")
         parser = pcl.block('{', '}')
     }
 
@@ -44,7 +40,7 @@ test_quotes :: proc(t: ^testing.T) {
 
     {
         context.allocator = parser_allocator
-        pcl.SKIP = skip
+        pcl.SKIP = pcl.skip_any_of(" \n")
         parser = pcl.block('"', '"')
     }
 
@@ -64,7 +60,7 @@ print_bracket :: proc() {
 
     {
         context.allocator = parser_allocator
-        pcl.SKIP = skip
+        pcl.SKIP = pcl.skip_any_of(" \n")
         parser = pcl.block('{', '}')
     }
     str := `
@@ -85,7 +81,7 @@ print_quotes :: proc() {
 
     {
         context.allocator = parser_allocator
-        pcl.SKIP = skip
+        pcl.SKIP = pcl.skip_any_of(" \n")
         parser = pcl.block('"', '"')
     }
 

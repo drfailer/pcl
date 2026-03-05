@@ -9,7 +9,7 @@ import "core:mem"
 Parser :: struct {
     name: string,
     parse: ParseProc,
-    skip: SkipProc, // skip proc
+    skip: SkipCtx, // skip proc
     exec: ExecProc,
     parsers: [dynamic]^Parser,
 }
@@ -18,9 +18,6 @@ ParseResult :: union {
     ^ExecTreeNode,
     ExecResult,
 }
-
-
-SkipProc :: proc(c: rune) -> bool // TODO: should it take the state?
 
 ParseProc :: proc(self: ^Parser, state: ^ParserState) -> (res: ParseResult, err: ParserError)
 
@@ -42,7 +39,7 @@ parser_create_from_dynamic_array_generic :: proc(
     $T: typeid,
     name: string,
     parse: ParseProc,
-    skip: SkipProc,
+    skip: SkipCtx,
     exec: ExecProc,
     parsers: [dynamic]^Parser,
 ) -> ^T {
@@ -59,7 +56,7 @@ parser_create_from_slice_generic :: proc(
     $T: typeid,
     name: string,
     parse: ParseProc,
-    skip: SkipProc,
+    skip: SkipCtx,
     exec: ExecProc,
     parsers: []^Parser = nil,
 ) -> ^T {
@@ -78,7 +75,7 @@ parser_create_from_slice_generic :: proc(
 parser_create_from_dynamic_array :: proc(
     name: string,
     parse: ParseProc,
-    skip: SkipProc,
+    skip: SkipCtx,
     exec: ExecProc,
     parsers: [dynamic]^Parser,
 ) -> ^Parser {
@@ -88,7 +85,7 @@ parser_create_from_dynamic_array :: proc(
 parser_create_from_slice :: proc(
     name: string,
     parse: ParseProc,
-    skip: SkipProc,
+    skip: SkipCtx,
     exec: ExecProc,
     parsers: []^Parser = nil,
 ) -> ^Parser {
@@ -115,12 +112,12 @@ parser_parse :: proc(state: ^ParserState, parser: ^Parser) -> (res: ParseResult,
     return parser->parse(state)
 }
 
-parser_skip :: proc(state: ^ParserState, parser_skip: SkipProc) -> (pos: int, loc: Location) {
-    if parser_skip == nil {
+parser_skip :: proc(state: ^ParserState, skip_ctx: SkipCtx) -> (pos: int, loc: Location) {
+    if skip_ctx.skip == nil {
         return state.pos, state.loc
     }
-    for !state_eof(state) && parser_skip(state_char(state)) {
-        state_eat_one(state) or_break
+    for !state_eof(state) {
+        skip_ctx.skip(state, skip_ctx.data) or_break
     }
     state.pos = state.cur
     return state.pos, state.loc
