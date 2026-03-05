@@ -42,7 +42,7 @@ PredicateParser :: struct {
 
 pred :: proc(
     pred: proc(c: rune) -> bool,
-    skip: SkipProc = SKIP,
+    skip: SkipCtx = SKIP,
     exec: ExecProc = nil,
     name: string = "pred",
 ) -> ^Parser {
@@ -61,7 +61,7 @@ pred :: proc(
 
 one_of :: proc(
     $chars: string,
-    skip: SkipProc = SKIP,
+    skip: SkipCtx = SKIP,
     exec: ExecProc = nil,
     name: string = "one_of",
 ) -> ^Parser {
@@ -83,7 +83,7 @@ one_of :: proc(
 range :: proc(
     $c1: rune,
     $c2: rune,
-    skip: SkipProc = SKIP,
+    skip: SkipCtx = SKIP,
     exec: ExecProc = nil,
     name: string = "range",
 ) -> ^Parser {
@@ -109,7 +109,7 @@ LitCParser :: struct {
 
 lit_c :: proc(
     char: rune,
-    skip: SkipProc = SKIP,
+    skip: SkipCtx = SKIP,
     exec: ExecProc = nil,
     name: string = "lit_c",
 ) -> ^Parser {
@@ -147,7 +147,7 @@ LitStrParser :: struct {
 
 lit_str :: proc(
     str: string,
-    skip: SkipProc = SKIP,
+    skip: SkipCtx = SKIP,
     exec: ExecProc = nil,
     name: string = "lit",
 ) -> ^Parser {
@@ -199,7 +199,7 @@ lit :: proc { lit_c, lit_str }
 block_char :: proc(
     $opening: rune,
     $closing: rune,
-    skip: SkipProc = SKIP,
+    skip: SkipCtx = SKIP,
     exec: ExecProc = nil,
     name: string = "block",
 ) -> ^Parser {
@@ -301,21 +301,10 @@ block_char :: proc(
     return parser_create(name, parse, skip, exec)
 }
 
-cursor_on_string :: proc(state: ^ParserState, $prefix: string) -> bool {
-    state_idx := state.cur
-    for c, idx in prefix {
-        if state_idx > len(state.content) || state_char_at(state, state_idx) != c {
-            return false
-        }
-        state_idx += 1
-    }
-    return true
-}
-
 block_str :: proc(
     $opening: string,
     $closing: string,
-    skip: SkipProc = SKIP,
+    skip: SkipCtx = SKIP,
     exec: ExecProc = nil,
     name: string = "block",
 ) -> ^Parser {
@@ -368,7 +357,7 @@ block :: proc {
 
 line_starting_with :: proc(
     start_parser: CombinatorInput,
-    skip: SkipProc = SKIP,
+    skip: SkipCtx = SKIP,
     exec: ExecProc = nil,
     name: string = "line_starting_with",
 ) -> ^Parser {
@@ -411,7 +400,7 @@ separated_items :: proc(
     separator: rune,
     allow_trailing_separator: bool = false,
     allow_empty_list: bool = true,
-    skip: SkipProc = SKIP,
+    skip: SkipCtx = SKIP,
     exec: ExecProc = nil,
     name: string = "separated_items",
 ) -> ^Parser {

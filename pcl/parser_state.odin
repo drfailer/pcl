@@ -73,6 +73,20 @@ state_eat_one :: proc(state: ^ParserState) -> (ok: bool) {
     return true
 }
 
+state_eat_count :: proc(state: ^ParserState, count: int) -> (ok: bool) {
+    if state.cur + count >= len(state.content^) do return false
+    for _ in 0..<count {
+        if state_char(state) == '\n' {
+            state.loc.row += 1
+            state.loc.col = 1
+        } else {
+            state.loc.col += 1
+        }
+        state.cur += 1
+    }
+    return true
+}
+
 state_eof :: proc(state: ^ParserState) -> bool {
     return state.cur >= len(state.content^)
 }

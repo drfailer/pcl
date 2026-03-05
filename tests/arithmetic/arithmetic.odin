@@ -188,10 +188,6 @@ exec_parent :: proc(data: ^pcl.ExecData) -> pcl.ExecResult {
     return pcl.result(data, node)
 }
 
-skip_spaces :: proc(char: rune) -> bool {
-    return u8(char) == ' ' || u8(char) == '\n'
-}
-
 // <expr> := <expr> "+" <term> | <term>
 //
 // <expr> := <term> <expr'>
@@ -205,14 +201,13 @@ arithmetic_grammar :: proc(allocator: pcl.ParserAllocator) -> ^pcl.Parser {
     using pcl
     context.allocator = allocator
 
-    pcl.SKIP = skip_spaces
-
-    expr := declare(name = "expr")
-
     digits := plus(range('0', '9'), name = "digits")
-
     ints := combine(digits, name = "ints", exec = exec_value(i32))
     floats := combine(digits, '.', opt(digits), name = "floats", exec = exec_value(f32))
+
+    pcl.SKIP = skip_any_of(" \n")
+
+    expr := declare(name = "expr")
 
     parent := seq('(', rec(expr), ')', name = "parent", exec = exec_parent)
     sin := seq("sin", parent, exec = exec_function(.Sin))
