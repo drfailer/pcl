@@ -8,6 +8,7 @@ PCLHandle :: struct {
     // TODO: error_stack: [dynamic]ParserError
     rd: RecursionData,
     branch_depth: u64,
+    do_not_exec: bool,
     error_allocator: mem.Allocator,
     tree_arena: mem.Dynamic_Arena,
     tree_allocator: mem.Allocator, // TODO: this should be a pool

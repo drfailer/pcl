@@ -131,7 +131,6 @@ single :: proc(
     return parser_create(name, parse, skip, exec, create_parser_array(context.allocator, skip, input))
 }
 
-// TODO(NO_EXEC exec flag): add an exec flag to avoid allocating the exec tree!
 not :: proc(
     input: CombinatorInput,
     skip: SkipCtx = SKIP,
@@ -140,10 +139,12 @@ not :: proc(
     parse := proc(self: ^Parser, state: ^ParserState) -> (res: ParseResult, err: ParserError) {
         sub_state := state^
         parser_skip(&sub_state, self.skip)
-        if res, err = parser_parse(&sub_state, self.parsers[0]); err == nil {
+        state.pcl_handle.do_not_exec = true
+        res, err = parser_parse(&sub_state, self.parsers[0])
+        state.pcl_handle.do_not_exec = false
+        if err == nil {
             return nil, syntax_error(state, "not parser failed.")
         }
-        release_result(state, res) // TODO(NO_EXEC exec flag): this should not be required
         return nil, nil
     }
     return parser_create(name, parse, skip, nil, create_parser_array(context.allocator, skip, input))
@@ -372,10 +373,12 @@ combine :: proc(
         sub_state := state^
         pos, loc := parser_skip(&sub_state, self.skip)
 
-        if res, err = parser_parse(&sub_state, self.parsers[0]); err != nil {
+        state.pcl_handle.do_not_exec = true
+        res, err = parser_parse(&sub_state, self.parsers[0])
+        state.pcl_handle.do_not_exec = false
+        if err != nil {
             return nil, err
         }
-        release_result(state, res) // TODO(NO_EXEC exec flag): this should not be necessary
         state_pre_exec(state, pos, sub_state.cur, loc)
         res = parser_exec(state, self.exec)
         state_post_exec(state, sub_state.loc)

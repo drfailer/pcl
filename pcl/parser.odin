@@ -187,6 +187,7 @@ parser_exec_with_childs :: proc(
     childs: [dynamic]ParseResult,
     flags: bit_set[ExecFlag] = {},
 ) -> ParseResult {
+    if state.pcl_handle.do_not_exec do return nil
     loc := state.loc
     pr: ParseResult
     pr = memory_pool_allocate(&state.pcl_handle.exec_node_pool)
@@ -197,12 +198,14 @@ parser_exec_with_childs :: proc(
 }
 
 parser_exec_with_child :: proc(state: ^ParserState, exec: ExecProc, result: ParseResult, flags: bit_set[ExecFlag] = {}) -> ParseResult {
+    if state.pcl_handle.do_not_exec do return nil
     results := make([dynamic]ParseResult, allocator = state.pcl_handle.tree_allocator)
     append(&results, result)
     return parser_exec_with_childs(state, exec, results, flags)
 }
 
 parser_exec_no_child :: proc(state: ^ParserState, exec: ExecProc, flags: bit_set[ExecFlag] = {}) -> ParseResult {
+    if state.pcl_handle.do_not_exec do return nil
     return parser_exec_with_childs(state, exec, [dynamic]ParseResult{}, flags)
 }
 
