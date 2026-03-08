@@ -387,10 +387,6 @@ combine :: proc(
     return parser_create(name, parse, skip, exec, create_parser_array(context.allocator, skip, ..inputs))
 }
 
-
-// TODO: the left recursion will be rewritten (it allocates to many nodes + we
-// shouldn't use recursion in it to make things easier to optimize)
-
 // reset the top nodes for left recursive grammars
 rec :: proc(parser: ^Parser) -> ^Parser {
     parse := proc(self: ^Parser, state: ^ParserState) -> (res: ParseResult, err: ParserError) {
@@ -474,8 +470,8 @@ lrec :: proc(
         for parser, idx in middle_rules {
             parser_skip(&sub_state, self.skip)
             if res, err = parser_parse(&sub_state, parser); err != nil {
-                delete(childs)
                 release_results(state, childs[:idx])
+                delete(childs)
                 return nil, err
             }
             childs[1 + idx] = res
@@ -498,7 +494,7 @@ lrec :: proc(
             delete_key(&state.pcl_handle.rd.top_nodes, recursive_rule)
         }
 
-        if state.pcl_handle.rd.depth == 0 {
+        if state.pcl_handle.rd.depth == 1 {
             clear(&state.pcl_handle.rd.top_nodes)
         }
         return res, nil
