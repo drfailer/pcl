@@ -111,9 +111,8 @@ parse_file :: proc(
     user_data: rawptr = nil,
     allocator := context.allocator, // we need to create the string
 ) -> (filecontent: string, state: ParserState, res: ExecResult, ok: bool) {
-    data: []u8
-	data, ok = os.read_entire_file(filepath, allocator)
-	if !ok {
+	data, err := os.read_entire_file(filepath, allocator)
+	if err != nil {
 		// could not read file
 		return
 	}
