@@ -436,8 +436,8 @@ lrec :: proc(
     name: string = "lrec",
 ) -> ^Parser {
     parse := proc(self: ^Parser, state: ^ParserState) -> (res: ParseResult, err: ParserError) {
-        state.pcl_handle.rd.depth += 1
-        defer state.pcl_handle.rd.depth -= 1
+        state_enter_lrec(state)
+        defer state_leave_lrec(state)
 
         recursive_rule := self.parsers[0]
         terminal_rule := self.parsers[len(self.parsers) - 1]
@@ -492,10 +492,6 @@ lrec :: proc(
         if recursive_rule in state.pcl_handle.rd.top_nodes {
             res = state.pcl_handle.rd.top_nodes[recursive_rule]
             delete_key(&state.pcl_handle.rd.top_nodes, recursive_rule)
-        }
-
-        if state.pcl_handle.rd.depth == 1 {
-            clear(&state.pcl_handle.rd.top_nodes)
         }
         return res, nil
     }

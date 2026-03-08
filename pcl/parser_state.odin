@@ -37,6 +37,17 @@ state_leave_branch :: proc(state: ^ParserState) {
     state.pcl_handle.branch_depth -= 1
 }
 
+state_enter_lrec :: proc(state: ^ParserState) {
+    state.pcl_handle.rd.depth += 1
+}
+
+state_leave_lrec :: proc(state: ^ParserState) {
+    state.pcl_handle.rd.depth -= 1
+    if state.pcl_handle.rd.depth == 0 {
+        clear(&state.pcl_handle.rd.top_nodes)
+    }
+}
+
 state_pre_exec :: proc(state: ^ParserState, pos, cur: int, loc: Location) {
     state.pos = pos
     state.cur = cur
