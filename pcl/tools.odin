@@ -38,11 +38,12 @@ memory_pool_create :: proc($T: typeid, default_capacity := 0, allocator := conte
 memory_pool_destroy_impl :: proc(pool: ^MemoryPool($T), $debug: bool) {
     node := pool.free_nodes
     nb_nodes := 0
-    nb_non_released_nodes := 0
+    nb_released_nodes := 0
 
     for node != nil {
         when debug {
             nb_nodes += 1
+            nb_released_nodes += 1
         }
         next := node.next
         free(node, pool.allocator)
@@ -52,15 +53,14 @@ memory_pool_destroy_impl :: proc(pool: ^MemoryPool($T), $debug: bool) {
     for node != nil {
         when debug {
             nb_nodes += 1
-            nb_non_released_nodes += 1
         }
         next := node.next
         free(node, pool.allocator)
         node = next
     }
     when debug {
-        if nb_nodes != nb_non_released_nodes {
-            log.info("the memory pool allocated", nb_nodes ,"elements, and ", nb_non_released_nodes," where released.")
+        if nb_nodes != nb_released_nodes {
+            log.info("the memory pool allocated", nb_nodes ,"elements, and ", nb_released_nodes," where released.")
         }
     }
 }
