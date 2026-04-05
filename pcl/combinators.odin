@@ -460,8 +460,13 @@ lrec :: proc(
 
         // success if eof and no operator
         parser_skip(&sub_state, self.skip)
-        if state_eof(&sub_state) && len(middle_rules) == 0 {
+        if state_eof(&sub_state) || len(middle_rules) == 0 {
             delete_key(&state.pcl_handle.rd.top_nodes, recursive_rule)
+            log.info("res(eof):", self.name, state.content[sub_state.pos:])
+            // if we return we have to update the state; we do not execute here
+            // (no need to: string empty, or no middel rules)
+            state_pre_exec(state, pos, sub_state.cur, loc)
+            state_post_exec(state, sub_state.loc)
             return res, nil
         }
 
