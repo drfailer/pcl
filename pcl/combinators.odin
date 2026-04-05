@@ -395,12 +395,9 @@ rec :: proc(parser: ^Parser) -> ^Parser {
     parse := proc(self: ^Parser, state: ^ParserState) -> (res: ParseResult, err: ParserError) {
         recursive_rule := self.parsers[0]
 
-        old_top_nodes := state.pcl_handle.rd.top_nodes
-        state.pcl_handle.rd.top_nodes = make(map[^Parser]ParseResult)
-        defer {
-            delete(state.pcl_handle.rd.top_nodes)
-            state.pcl_handle.rd.top_nodes = old_top_nodes
-        }
+        old_top_nodes, ok := state.pcl_handle.rd.top_nodes[recursive_rule]
+        if ok do delete_key(&state.pcl_handle.rd.top_nodes, recursive_rule)
+        defer if ok do state.pcl_handle.rd.top_nodes[recursive_rule] = old_top_nodes
 
         if res, err = parser_parse(state, self.parsers[0]); err != nil {
             return nil, err
@@ -442,27 +439,20 @@ lrec :: proc(
         state_enter_lrec(state)
         defer state_leave_lrec(state)
 
-        recursive_rule := self.parsers[0]
         terminal_rule := self.parsers[len(self.parsers) - 1]
+        recursive_rule := self.parsers[0]
         middle_rules := self.parsers[1:len(self.parsers) - 1]
         sub_state := state^
         pos, loc := parser_skip(&sub_state, self.skip)
 
-        if res, err = parser_parse(&sub_state, terminal_rule); err != nil {
+        if res, err = lrec_apply_terminal_rule(self, &sub_state); err != nil {
             return nil, err
         }
-
-        if recursive_rule in state.pcl_handle.rd.top_nodes {
-            state.pcl_handle.rd.top_nodes[recursive_rule].(^ExecTreeNode).childs[len(self.parsers) - 1] = res
-            state.pcl_handle.rd.top_nodes[recursive_rule].(^ExecTreeNode).ctx.state.cur = state.pos
-            res = state.pcl_handle.rd.top_nodes[recursive_rule]
-        }
+        term_res := res // save the terminal rule result
 
         // success if eof and no operator
         parser_skip(&sub_state, self.skip)
         if state_eof(&sub_state) || len(middle_rules) == 0 {
-            delete_key(&state.pcl_handle.rd.top_nodes, recursive_rule)
-            log.info("res(eof):", self.name, state.content[sub_state.pos:])
             // if we return we have to update the state; we do not execute here
             // (no need to: string empty, or no middel rules)
             state_pre_exec(state, pos, sub_state.cur, loc)
@@ -470,30 +460,26 @@ lrec :: proc(
             return res, nil
         }
 
-
-        childs := make([dynamic]ParseResult, len(self.parsers), allocator = state.pcl_handle.tree_allocator)
-        childs[0] = res
-
-        // apply middle rules
-        for parser, idx in middle_rules {
-            parser_skip(&sub_state, self.skip)
-            if res, err = parser_parse(&sub_state, parser); err != nil {
-                release_results(state, childs[:idx])
-                delete(childs)
-                return nil, err
+        childs: [dynamic]ParseResult
+        if childs, err = lrec_apply_middle_rules(self, &sub_state); err != nil {
+            if recursive_rule not_in state.pcl_handle.rd.top_nodes {
+                release_result(state, term_res)
             }
-            childs[1 + idx] = res
+            return nil, err
         }
+        childs[0] = res
 
         state_pre_exec(state, pos, sub_state.cur, loc)
         res = parser_exec(state, self.exec, childs)
         state_post_exec(state, sub_state.loc)
         res.(^ExecTreeNode).ctx.state.pos = childs[0].(^ExecTreeNode).ctx.state.pos
         state.pcl_handle.rd.top_nodes[recursive_rule] = res
+        rule_res := res
 
         // apply recursive rule
         if res, err = parser_parse(state, recursive_rule); err != nil {
-            release_result(state, res)
+            release_result(state, state.pcl_handle.rd.top_nodes[recursive_rule])
+            delete_key(&state.pcl_handle.rd.top_nodes, recursive_rule)
             return nil, err
         }
 
@@ -504,4 +490,41 @@ lrec :: proc(
         return res, nil
     }
     return parser_create(name, parse, skip, exec, create_parser_array(context.allocator, skip, ..inputs))
+}
+
+@(private="file")
+lrec_apply_terminal_rule :: proc(self: ^Parser, state: ^ParserState) -> (res: ParseResult, err: ParserError) {
+    recursive_rule := self.parsers[0]
+    terminal_rule := self.parsers[len(self.parsers) - 1]
+    // parse the rule
+    if res, err = parser_parse(state, terminal_rule); err != nil {
+        return nil, err
+    }
+    // update the top nodes if required
+    if recursive_rule in state.pcl_handle.rd.top_nodes {
+        release_result(state, state.pcl_handle.rd.top_nodes[recursive_rule].(^ExecTreeNode).childs[len(self.parsers) - 1])
+        state.pcl_handle.rd.top_nodes[recursive_rule].(^ExecTreeNode).childs[len(self.parsers) - 1] = res
+        state.pcl_handle.rd.top_nodes[recursive_rule].(^ExecTreeNode).ctx.state.cur = state.pos
+        res = state.pcl_handle.rd.top_nodes[recursive_rule]
+    }
+    return res, nil
+}
+
+@(private="file")
+lrec_apply_middle_rules :: proc(self: ^Parser, state: ^ParserState) -> (results: [dynamic]ParseResult, err: ParserError) {
+    recursive_rule := self.parsers[0]
+    middle_rules := self.parsers[1:len(self.parsers) - 1]
+    res: ParseResult
+
+    results = make([dynamic]ParseResult, len(self.parsers), allocator = state.pcl_handle.tree_allocator)
+    for parser, idx in middle_rules {
+        parser_skip(state, self.skip)
+        if res, err = parser_parse(state, parser); err != nil {
+            release_results(state, results[:])
+            delete(results)
+            return nil, err
+        }
+        results[idx + 1] = res
+    }
+    return results, nil
 }

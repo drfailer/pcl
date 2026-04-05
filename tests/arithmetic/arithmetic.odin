@@ -221,9 +221,9 @@ arithmetic_grammar :: proc(allocator: pcl.ParserAllocator) -> ^pcl.Parser {
     div := lrec(term, '/', factor, exec = exec_operator(.Div))
     define(term, or(mul, div, factor))
 
-    add := lrec(expr, '+', term, exec = exec_operator(.Add))
-    sub := lrec(expr, '-', term, exec = exec_operator(.Sub))
-    define(expr, or(add, sub, term))
+    add := lrec(expr, '+', rec(term), exec = exec_operator(.Add))
+    sub := lrec(expr, '-', rec(term), exec = exec_operator(.Sub))
+    define(expr, or(add, sub, rec(term)))
     return expr
 }
 
