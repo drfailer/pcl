@@ -448,11 +448,12 @@ lrec :: proc(
         if res, err = lrec_apply_terminal_rule(self, &sub_state); err != nil {
             return nil, err
         }
-        term_res := res // save the terminal rule result
+        term_res := res // we save the term rule for free
+        res = lrec_update_rhs(self, state, res, sub_state.cur)
 
         // success if eof and no operator
         parser_skip(&sub_state, self.skip)
-        if state_eof(&sub_state) || len(middle_rules) == 0 {
+        if state_eof(&sub_state) && len(middle_rules) == 0 {
             // if we return we have to update the state; we do not execute here
             // (no need to: string empty, or no middel rules)
             state_pre_exec(state, pos, sub_state.cur, loc)
@@ -474,7 +475,6 @@ lrec :: proc(
         state_post_exec(state, sub_state.loc)
         res.(^ExecTreeNode).ctx.state.pos = childs[0].(^ExecTreeNode).ctx.state.pos
         state.pcl_handle.rd.top_nodes[recursive_rule] = res
-        rule_res := res
 
         // apply recursive rule
         if res, err = parser_parse(state, recursive_rule); err != nil {
@@ -500,14 +500,19 @@ lrec_apply_terminal_rule :: proc(self: ^Parser, state: ^ParserState) -> (res: Pa
     if res, err = parser_parse(state, terminal_rule); err != nil {
         return nil, err
     }
-    // update the top nodes if required
-    if recursive_rule in state.pcl_handle.rd.top_nodes {
-        release_result(state, state.pcl_handle.rd.top_nodes[recursive_rule].(^ExecTreeNode).childs[len(self.parsers) - 1])
-        state.pcl_handle.rd.top_nodes[recursive_rule].(^ExecTreeNode).childs[len(self.parsers) - 1] = res
-        state.pcl_handle.rd.top_nodes[recursive_rule].(^ExecTreeNode).ctx.state.cur = state.pos
-        res = state.pcl_handle.rd.top_nodes[recursive_rule]
-    }
     return res, nil
+}
+
+@(private="file")
+lrec_update_rhs :: proc(self: ^Parser, state: ^ParserState, rhs: ParseResult, cur: int) -> (lhs: ParseResult) {
+    rec_rule := self.parsers[0]
+    if rec_rule in state.pcl_handle.rd.top_nodes {
+        release_result(state, state.pcl_handle.rd.top_nodes[rec_rule].(^ExecTreeNode).childs[len(self.parsers) - 1])
+        state.pcl_handle.rd.top_nodes[rec_rule].(^ExecTreeNode).childs[len(self.parsers) - 1] = rhs
+        state.pcl_handle.rd.top_nodes[rec_rule].(^ExecTreeNode).ctx.state.cur = cur
+        return state.pcl_handle.rd.top_nodes[rec_rule]
+    }
+    return rhs
 }
 
 @(private="file")
