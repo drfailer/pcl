@@ -207,23 +207,23 @@ arithmetic_grammar :: proc(allocator: pcl.ParserAllocator) -> ^pcl.Parser {
 
     pcl.SKIP = skip_any_of(" \n")
 
-    expr := declare(name = "expr")
+    expr := declare_lrec(name = "expr")
 
-    parent := seq('(', rec(expr), ')', name = "parent", exec = exec_parent)
+    parent := seq('(', expr, ')', name = "parent", exec = exec_parent)
     sin := seq("sin", parent, exec = exec_function(.Sin))
     cos := seq("cos", parent, exec = exec_function(.Cos))
     tan := seq("tan", parent, exec = exec_function(.Tan))
     functions := or(cos, sin, tan)
     factor := or(floats, ints, parent, functions, name = "factor")
 
-    term := declare(name = "term")
+    term := declare_lrec(name = "term")
     mul := lrec(term, '*', factor, exec = exec_operator(.Mul))
     div := lrec(term, '/', factor, exec = exec_operator(.Div))
     define(term, or(mul, div, factor))
 
-    add := lrec(expr, '+', rec(term), exec = exec_operator(.Add))
-    sub := lrec(expr, '-', rec(term), exec = exec_operator(.Sub))
-    define(expr, or(add, sub, rec(term)))
+    add := lrec(expr, '+', term, exec = exec_operator(.Add))
+    sub := lrec(expr, '-', term, exec = exec_operator(.Sub))
+    define(expr, or(add, sub, term))
     return expr
 }
 

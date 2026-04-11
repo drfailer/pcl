@@ -44,18 +44,39 @@ release_results :: proc(state: ^ParserState, results: []ParseResult) {
 // combinators /////////////////////////////////////////////////////////////////
 
 declare :: proc(name: string = "parser") -> ^Parser {
+    // we need to have this intermediate parse function in case the definition
+    // of the parser is a special type (we can't just swap a normal parser with
+    // a specialized one, otherwise it would result in a bad cast in the
+    // underlying parse proc).
     parse := proc(self: ^Parser, state: ^ParserState) -> (res: ParseResult, err: ParserError) {
         if len(self.parsers) == 0 || self.parsers[0] == nil {
             return nil, internal_error(state, "unimplemented parser `{}`.", self.name)
         }
+        return parser_parse(state, self.parsers[0])
+    }
+    return parser_create(name, parse, NO_SKIP, nil, []^Parser{nil})
+}
 
-        parser_skip(state, self.skip)
+declare_lrec :: proc(name: string = "lrec_parser") -> ^Parser {
+    parse := proc(self: ^Parser, state: ^ParserState) -> (res: ParseResult, err: ParserError) {
+        if len(self.parsers) == 0 || self.parsers[0] == nil {
+            return nil, internal_error(state, "unimplemented parser `{}`.", self.name)
+        }
+        recursive_rule := self
+
+        old_top_nodes, ok := state.pcl_handle.rd.top_nodes[recursive_rule]
+        if ok do delete_key(&state.pcl_handle.rd.top_nodes, recursive_rule)
+        defer if ok do state.pcl_handle.rd.top_nodes[recursive_rule] = old_top_nodes
+
         if res, err = parser_parse(state, self.parsers[0]); err != nil {
+            if recursive_rule in state.pcl_handle.rd.top_nodes {
+                assert(state.pcl_handle.rd.top_nodes[recursive_rule] == nil);
+            }
             return nil, err
         }
         return res, nil
     }
-    return parser_create(name, parse, NO_SKIP, nil, []^Parser{nil})
+    return parser_create(LRecParser, name, parse, NO_SKIP, nil, []^Parser{nil})
 }
 
 define :: proc(
@@ -64,12 +85,8 @@ define :: proc(
     skip: SkipCtx = SKIP,
     exec: ExecProc = nil,
 ) {
-    if len(parser.parsers) == 0 {
-        fmt.printfln("error: cannot define parser {}.", parser.name)
-    }
-    if parser.parsers[0] != nil {
-        fmt.printfln("error: redifinition of parser {}.", parser.name)
-    }
+    if len(parser.parsers) == 0 do fmt.printfln("error: cannot define parser {}.", parser.name)
+    if parser.parsers[0] != nil do fmt.printfln("error: redifinition of parser {}.", parser.name)
     if impl.exec == nil {
         impl.exec = exec
     }
@@ -390,24 +407,12 @@ combine :: proc(
     return parser_create(name, parse, skip, exec, create_parser_array(context.allocator, skip, ..inputs))
 }
 
-// reset the top nodes for left recursive grammars
-rec :: proc(parser: ^Parser) -> ^Parser {
-    parse := proc(self: ^Parser, state: ^ParserState) -> (res: ParseResult, err: ParserError) {
-        recursive_rule := self.parsers[0]
+// left recursive parser ///////////////////////////////////////////////////////
 
-        old_top_nodes, ok := state.pcl_handle.rd.top_nodes[recursive_rule]
-        if ok do delete_key(&state.pcl_handle.rd.top_nodes, recursive_rule)
-        defer if ok do state.pcl_handle.rd.top_nodes[recursive_rule] = old_top_nodes
-
-        if res, err = parser_parse(state, self.parsers[0]); err != nil {
-            if recursive_rule in state.pcl_handle.rd.top_nodes {
-                assert(state.pcl_handle.rd.top_nodes[recursive_rule] == nil);
-            }
-            return nil, err
-        }
-        return res, nil
-    }
-    return parser_create("", parse, NO_SKIP, nil, []^Parser{parser})
+LRecParser :: struct {
+    using parser: Parser,
+    depth: u64,
+    rhs: ^Parser,
 }
 
 /*
@@ -480,7 +485,7 @@ lrec :: proc(
         state.pcl_handle.rd.top_nodes[recursive_rule] = res
 
         // apply recursive rule
-        if res, err = parser_parse(state, recursive_rule); err != nil {
+        if res, err = parser_parse(state, recursive_rule.parsers[0]); err != nil {
             release_result(state, state.pcl_handle.rd.top_nodes[recursive_rule])
             delete_key(&state.pcl_handle.rd.top_nodes, recursive_rule)
             return nil, err
