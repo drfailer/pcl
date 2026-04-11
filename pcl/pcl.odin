@@ -35,7 +35,7 @@ handle_create :: proc() -> (pcl_handle: ^PCLHandle) {
 }
 
 handle_destroy :: proc(pcl_handle: ^PCLHandle) {
-    memory_pool_destroy_debug(&pcl_handle.exec_node_pool)
+    memory_pool_destroy(&pcl_handle.exec_node_pool)
     mem.dynamic_arena_destroy(&pcl_handle.exec_arena)
     mem.dynamic_arena_destroy(&pcl_handle.tree_arena)
     free(pcl_handle)
