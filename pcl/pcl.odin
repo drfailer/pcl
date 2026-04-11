@@ -10,6 +10,9 @@ PCLHandle :: struct {
     lrec_depth: u64,
     do_not_exec: bool,
     error_allocator: mem.Allocator,
+    // parser allocator
+    parser_arena: mem.Dynamic_Arena,
+    parser_allocator: mem.Allocator,
     // result allocator
     result_arena: mem.Dynamic_Arena,
     result_allocator: mem.Allocator,
@@ -24,6 +27,10 @@ PCLHandle :: struct {
 
 handle_create :: proc() -> (pcl_handle: ^PCLHandle) {
     pcl_handle = new(PCLHandle)
+
+    // allocator for the parser graph (optionaly used by the user)
+    mem.dynamic_arena_init(&pcl_handle.parser_arena)
+    pcl_handle.parser_allocator = mem.dynamic_arena_allocator(&pcl_handle.parser_arena)
 
     // allocator for the exec tree
     mem.dynamic_arena_init(&pcl_handle.result_arena)
@@ -41,6 +48,7 @@ handle_destroy :: proc(pcl_handle: ^PCLHandle) {
     memory_pool_destroy(&pcl_handle.exec_node_pool)
     mem.dynamic_arena_destroy(&pcl_handle.exec_arena)
     mem.dynamic_arena_destroy(&pcl_handle.result_arena)
+    mem.dynamic_arena_destroy(&pcl_handle.parser_arena)
     free(pcl_handle)
 }
 
@@ -52,6 +60,10 @@ handle_reset :: proc(pcl_handle: ^PCLHandle) {
 
 handle_grammar :: proc(pcl_handle: ^PCLHandle) -> ^Parser {
     return pcl_handle.current_grammar
+}
+
+handle_parser_allocator :: proc(pcl_handle: ^PCLHandle) -> mem.Allocator {
+    return pcl_handle.parser_allocator
 }
 
 // parse api ///////////////////////////////////////////////////////////////////

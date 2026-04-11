@@ -23,18 +23,6 @@ ParseProc :: proc(self: ^Parser, state: ^ParserState) -> (res: ParseResult, err:
 
 ParserAllocator :: mem.Allocator
 
-parser_allocator_create :: proc() -> ParserAllocator {
-    arena := new(mem.Dynamic_Arena)
-    mem.dynamic_arena_init(arena)
-    return mem.dynamic_arena_allocator(arena)
-}
-
-parser_allocator_destroy :: proc(allocator: ParserAllocator) {
-    arena := cast(^mem.Dynamic_Arena)allocator.data
-    mem.dynamic_arena_destroy(arena)
-    free(arena)
-}
-
 parser_create_from_dynamic_array_generic :: proc(
     $T: typeid,
     name: string,

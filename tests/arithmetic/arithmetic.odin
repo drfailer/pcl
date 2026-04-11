@@ -230,9 +230,8 @@ arithmetic_grammar :: proc(allocator: pcl.ParserAllocator) -> ^pcl.Parser {
 print_tree_of_expression :: proc(str: string) {
     pcl_handle := pcl.handle_create()
     defer pcl.handle_destroy(pcl_handle)
-    parser_allocator := pcl.parser_allocator_create()
+    parser_allocator := pcl.handle_parser_allocator(pcl_handle)
     arithmetic_parser := arithmetic_grammar(parser_allocator)
-    defer pcl.parser_allocator_destroy(parser_allocator)
 
     node_arena_data: [8192]byte
     node_arena: mem.Arena
@@ -253,9 +252,8 @@ print_tree_of_expression :: proc(str: string) {
 test_numbers :: proc(t: ^testing.T) {
     pcl_handle := pcl.handle_create()
     defer pcl.handle_destroy(pcl_handle)
-    parser_allocator := pcl.parser_allocator_create()
+    parser_allocator := pcl.handle_parser_allocator(pcl_handle)
     arithmetic_parser := arithmetic_grammar(parser_allocator)
-    defer pcl.parser_allocator_destroy(parser_allocator)
 
     node_arena_data: [8192]byte
     node_arena: mem.Arena
@@ -280,9 +278,8 @@ test_numbers :: proc(t: ^testing.T) {
 test_operation :: proc(t: ^testing.T) {
     pcl_handle := pcl.handle_create()
     defer pcl.handle_destroy(pcl_handle)
-    parser_allocator := pcl.parser_allocator_create()
+    parser_allocator := pcl.handle_parser_allocator(pcl_handle)
     arithmetic_parser := arithmetic_grammar(parser_allocator)
-    defer pcl.parser_allocator_destroy(parser_allocator)
 
     node_arena_data: [8192]byte
     node_arena: mem.Arena
@@ -307,9 +304,8 @@ test_operation :: proc(t: ^testing.T) {
 test_functions :: proc(t: ^testing.T) {
     pcl_handle := pcl.handle_create()
     defer pcl.handle_destroy(pcl_handle)
-    parser_allocator := pcl.parser_allocator_create()
+    parser_allocator := pcl.handle_parser_allocator(pcl_handle)
     arithmetic_parser := arithmetic_grammar(parser_allocator)
-    defer pcl.parser_allocator_destroy(parser_allocator)
 
     node_arena_data: [8192]byte
     node_arena: mem.Arena

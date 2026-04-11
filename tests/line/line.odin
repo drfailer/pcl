@@ -9,8 +9,7 @@ import "core:testing"
 doxygen :: proc(t: ^testing.T) {
     pcl_handle := pcl.handle_create()
     defer pcl.handle_destroy(pcl_handle)
-    parser_allocator := pcl.parser_allocator_create()
-    defer pcl.parser_allocator_destroy(parser_allocator)
+    parser_allocator := pcl.handle_parser_allocator(pcl_handle)
     parser: ^pcl.Parser
 
     {
