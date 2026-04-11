@@ -439,7 +439,7 @@ separated_items :: proc(
                                      self.name, self.separator)
         }
         state_pre_exec(state, pos, sub_state.cur, loc)
-        res = parser_exec(state, self.exec, results, flags = {.ListResult})
+        res = parser_exec(state, self.exec, results, flags = bit_set[ExecFlag]{.ListResult})
         state_post_exec(state, sub_state.loc)
         return res, nil
     }

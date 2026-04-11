@@ -63,10 +63,17 @@ declare_lrec :: proc(name: string = "lrec_parser") -> ^Parser {
         if len(self.parsers) == 0 || self.parsers[0] == nil {
             return nil, internal_error(state, "unimplemented parser `{}`.", self.name)
         }
+        // depth
+        depth_save := self.depth
+        defer self.depth = depth_save
+        // rhs
         rhs_save := self.rhs
         self.rhs = nil
         defer if rhs_save != nil do self.rhs = rhs_save
-        return parser_parse(state, self.parsers[0])
+        // run the parser
+        res, err = parser_parse(state, self.parsers[0])
+        assert(err == nil)
+        return res, err
     }
     return parser_create(LRecParser, name, parse, NO_SKIP, nil, []^Parser{nil})
 }
@@ -277,7 +284,7 @@ star :: proc(
             sub_state = tmp_sub_state
         }
         state_pre_exec(state, pos, sub_state.cur, loc)
-        res = parser_exec(state, self.exec, results, flags = {.ListResult})
+        res = parser_exec(state, self.exec, results, flags = bit_set[ExecFlag]{.ListResult})
         state_post_exec(state, sub_state.loc)
         return res, nil
     }
@@ -314,7 +321,7 @@ plus :: proc(
         }
         if sub_state.cur > pos {
             state_pre_exec(state, pos, sub_state.cur, loc)
-            res = parser_exec(state, self.exec, results, flags = {.ListResult})
+            res = parser_exec(state, self.exec, results, flags = bit_set[ExecFlag]{.ListResult})
             state_post_exec(state, sub_state.loc)
             return res, nil
         }
@@ -346,7 +353,7 @@ times :: proc(
         }
         if count == nb_times {
             state_pre_exec(state, pos, sub_state.cur, loc)
-            res = parser_exec(state, self.exec, results, flags = {.ListResult})
+            res = parser_exec(state, self.exec, results, flags = bit_set[ExecFlag]{.ListResult})
             state_post_exec(state, sub_state.loc)
             return res, nil
         }
@@ -442,8 +449,8 @@ lrec :: proc(
         sub_state := state^
         pos, loc := parser_skip(&sub_state, self.skip)
 
-        state_enter_lrec(state)
-        defer state_leave_lrec(state)
+        state_enter_lrec(state, recursive_rule)
+        defer state_leave_lrec(state, recursive_rule)
 
         if res, err = parser_parse(&sub_state, terminal_rule); err != nil {
             return nil, err
@@ -478,12 +485,12 @@ lrec :: proc(
 
         // apply recursive rule
         if res, err = parser_parse(state, recursive_rule.parsers[0]); err != nil {
-            release_result(state, recursive_rule.rhs)
-            recursive_rule.rhs = nil
+            // apparently, we never end up here
             return nil, err
         }
-
-        if recursive_rule.rhs != nil {
+        // TODO: why?
+        if recursive_rule.rhs != nil && recursive_rule.rhs.(^ExecTreeNode) != res.(^ExecTreeNode) {
+            release_result(state, res)
             res = recursive_rule.rhs
             recursive_rule.rhs = nil
         }
