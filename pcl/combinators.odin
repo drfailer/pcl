@@ -63,16 +63,10 @@ declare_lrec :: proc(name: string = "lrec_parser") -> ^Parser {
         if len(self.parsers) == 0 || self.parsers[0] == nil {
             return nil, internal_error(state, "unimplemented parser `{}`.", self.name)
         }
-
         rhs_save := self.rhs
         self.rhs = nil
         defer if rhs_save != nil do self.rhs = rhs_save
-
-        if res, err = parser_parse(state, self.parsers[0]); err != nil {
-            assert(self.rhs == nil)
-            return nil, err
-        }
-        return res, nil
+        return parser_parse(state, self.parsers[0])
     }
     return parser_create(LRecParser, name, parse, NO_SKIP, nil, []^Parser{nil})
 }
@@ -442,14 +436,14 @@ lrec :: proc(
     name: string = "lrec",
 ) -> ^Parser {
     parse := proc(self: ^Parser, state: ^ParserState) -> (res: ParseResult, err: ParserError) {
-        state_enter_lrec(state)
-        defer state_leave_lrec(state)
-
         terminal_rule := self.parsers[len(self.parsers) - 1]
         recursive_rule := cast(^LRecParser)self.parsers[0]
         middle_rules := self.parsers[1:len(self.parsers) - 1]
         sub_state := state^
         pos, loc := parser_skip(&sub_state, self.skip)
+
+        state_enter_lrec(state)
+        defer state_leave_lrec(state)
 
         if res, err = parser_parse(&sub_state, terminal_rule); err != nil {
             return nil, err
@@ -484,7 +478,6 @@ lrec :: proc(
 
         // apply recursive rule
         if res, err = parser_parse(state, recursive_rule.parsers[0]); err != nil {
-            assert(false)
             release_result(state, recursive_rule.rhs)
             recursive_rule.rhs = nil
             return nil, err
