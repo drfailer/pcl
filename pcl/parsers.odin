@@ -411,7 +411,7 @@ separated_items :: proc(
         self := cast(^SeparatedItemsParser)parser
         sub_state := state^
         pos, loc := parser_skip(&sub_state, self.skip)
-        results := make([dynamic]ParseResult, allocator = state.pcl_handle.tree_allocator)
+        results := make([dynamic]ParseResult, allocator = state.pcl_handle.result_allocator)
         trailing := false
 
         for {

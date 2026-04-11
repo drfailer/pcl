@@ -205,7 +205,7 @@ parser_exec_with_child :: proc(
     loc := #caller_location,
 ) -> ParseResult {
     if state.pcl_handle.do_not_exec do return nil
-    results := make([dynamic]ParseResult, allocator = state.pcl_handle.tree_allocator)
+    results := make([dynamic]ParseResult, allocator = state.pcl_handle.result_allocator)
     append(&results, result)
     return parser_exec_with_childs(state, exec, results, flags, loc = loc)
 }

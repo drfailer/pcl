@@ -10,11 +10,14 @@ PCLHandle :: struct {
     lrec_depth: u64,
     do_not_exec: bool,
     error_allocator: mem.Allocator,
-    tree_arena: mem.Dynamic_Arena,
-    tree_allocator: mem.Allocator, // TODO: this should be a pool
+    // result allocator
+    result_arena: mem.Dynamic_Arena,
+    result_allocator: mem.Allocator,
+    // exec tree allocator
     exec_arena: mem.Dynamic_Arena,
     exec_allocator: mem.Allocator,
     exec_node_pool: MemoryPool(ExecTreeNode),
+    // other infos
     user_data: rawptr,
     current_grammar: ^Parser,
 }
@@ -23,8 +26,8 @@ handle_create :: proc() -> (pcl_handle: ^PCLHandle) {
     pcl_handle = new(PCLHandle)
 
     // allocator for the exec tree
-    mem.dynamic_arena_init(&pcl_handle.tree_arena)
-    pcl_handle.tree_allocator = mem.dynamic_arena_allocator(&pcl_handle.tree_arena)
+    mem.dynamic_arena_init(&pcl_handle.result_arena)
+    pcl_handle.result_allocator = mem.dynamic_arena_allocator(&pcl_handle.result_arena)
 
     // allocator for the execution
     mem.dynamic_arena_init(&pcl_handle.exec_arena)
@@ -37,12 +40,12 @@ handle_create :: proc() -> (pcl_handle: ^PCLHandle) {
 handle_destroy :: proc(pcl_handle: ^PCLHandle) {
     memory_pool_destroy(&pcl_handle.exec_node_pool)
     mem.dynamic_arena_destroy(&pcl_handle.exec_arena)
-    mem.dynamic_arena_destroy(&pcl_handle.tree_arena)
+    mem.dynamic_arena_destroy(&pcl_handle.result_arena)
     free(pcl_handle)
 }
 
 handle_reset :: proc(pcl_handle: ^PCLHandle) {
-    free_all(pcl_handle.tree_allocator)
+    free_all(pcl_handle.result_allocator)
     free_all(pcl_handle.exec_allocator)
     pcl_handle.exec_node_pool = memory_pool_create(ExecTreeNode, 0, pcl_handle.exec_allocator)
 }

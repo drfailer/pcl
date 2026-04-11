@@ -237,7 +237,7 @@ seq :: proc(
     name: string = "seq",
 ) -> ^Parser {
     parse := proc(self: ^Parser, state: ^ParserState) -> (res: ParseResult, err: ParserError) {
-        results := make([dynamic]ParseResult, allocator = state.pcl_handle.tree_allocator)
+        results := make([dynamic]ParseResult, allocator = state.pcl_handle.result_allocator)
         sub_state := state^
         sub_res: ParseResult
         pos, loc := parser_skip(&sub_state, self.skip)
@@ -265,7 +265,7 @@ star :: proc(
     name: string = "star",
 ) -> ^Parser {
     parse := proc(self: ^Parser, state: ^ParserState) -> (res: ParseResult, err: ParserError) {
-        results := make([dynamic]ParseResult, allocator = state.pcl_handle.tree_allocator)
+        results := make([dynamic]ParseResult, allocator = state.pcl_handle.result_allocator)
         sub_state := state^
         pos, loc := parser_skip(&sub_state, self.skip)
 
@@ -301,7 +301,7 @@ plus :: proc(
     name: string = "plus",
 ) -> ^Parser {
     parse := proc(self: ^Parser, state: ^ParserState) -> (res: ParseResult, err: ParserError) {
-        results := make([dynamic]ParseResult, allocator = state.pcl_handle.tree_allocator)
+        results := make([dynamic]ParseResult, allocator = state.pcl_handle.result_allocator)
         sub_state := state^
         pos, loc := parser_skip(&sub_state, self.skip)
 
@@ -341,7 +341,7 @@ times :: proc(
     name: string = "times",
 ) -> ^Parser {
     parse := proc(self: ^Parser, state: ^ParserState) -> (res: ParseResult, err: ParserError) {
-        results := make([dynamic]ParseResult, allocator = state.pcl_handle.tree_allocator)
+        results := make([dynamic]ParseResult, allocator = state.pcl_handle.result_allocator)
         sub_state := state^
         pos, loc := parser_skip(&sub_state, self.skip)
         count := 0
@@ -517,7 +517,7 @@ lrec_apply_middle_rules :: proc(self: ^Parser, state: ^ParserState) -> (results:
     middle_rules := self.parsers[1:len(self.parsers) - 1]
     res: ParseResult
 
-    results = make([dynamic]ParseResult, len(self.parsers), allocator = state.pcl_handle.tree_allocator)
+    results = make([dynamic]ParseResult, len(self.parsers), allocator = state.pcl_handle.result_allocator)
     for parser, idx in middle_rules {
         parser_skip(state, self.skip)
         if res, err = parser_parse(state, parser); err != nil {
