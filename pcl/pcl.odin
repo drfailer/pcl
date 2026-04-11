@@ -6,8 +6,8 @@ import "core:os"
 
 PCLHandle :: struct {
     // TODO: error_stack: [dynamic]ParserError
-    rd: RecursionData,
     branch_depth: u64,
+    lrec_depth: u64,
     do_not_exec: bool,
     error_allocator: mem.Allocator,
     tree_arena: mem.Dynamic_Arena,
@@ -22,11 +22,6 @@ PCLHandle :: struct {
 handle_create :: proc() -> (pcl_handle: ^PCLHandle) {
     pcl_handle = new(PCLHandle)
 
-    pcl_handle.rd = RecursionData{
-        depth = 0,
-        top_nodes = make(map[^Parser]ParseResult),
-    }
-
     // allocator for the exec tree
     mem.dynamic_arena_init(&pcl_handle.tree_arena)
     pcl_handle.tree_allocator = mem.dynamic_arena_allocator(&pcl_handle.tree_arena)
@@ -40,7 +35,6 @@ handle_create :: proc() -> (pcl_handle: ^PCLHandle) {
 }
 
 handle_destroy :: proc(pcl_handle: ^PCLHandle) {
-    delete(pcl_handle.rd.top_nodes)
     memory_pool_destroy_debug(&pcl_handle.exec_node_pool)
     mem.dynamic_arena_destroy(&pcl_handle.exec_arena)
     mem.dynamic_arena_destroy(&pcl_handle.tree_arena)
