@@ -7,6 +7,7 @@ package pcl
 import "core:fmt"
 import "core:log"
 import "core:strings"
+import "core:unicode"
 
 // characters and string literals //////////////////////////////////////////////
 
@@ -102,9 +103,19 @@ range :: proc(
     return parser_create(name, parse, skip, exec)
 }
 
+rune_equal :: proc(lhs, rhs: rune, case_sensitive: bool) -> bool {
+    if case_sensitive || !unicode.is_letter(lhs) {
+        return lhs == rhs
+    }
+    lhs_upper := unicode.to_upper(lhs)
+    rhs_upper := unicode.to_upper(rhs)
+    return lhs_upper == rhs_upper
+}
+
 LitCParser :: struct {
     using parser: Parser,
     char: rune,
+    case_sensitive: bool,
 }
 
 lit_c :: proc(
@@ -112,6 +123,7 @@ lit_c :: proc(
     skip: SkipCtx = SKIP,
     exec: ExecProc = nil,
     name: string = "lit_c",
+    case_sensitive := true,
 ) -> ^Parser {
     parse := proc(parser: ^Parser, state: ^ParserState) -> (res: ParseResult, err: ParserError) {
         self := cast(^LitCParser)parser
@@ -123,10 +135,8 @@ lit_c :: proc(
                                      self.name, self.char)
         }
 
-        if (state_char(&sub_state) == self.char) {
-            if ok := state_eat_one(&sub_state); !ok {
-                return nil, InternalError{"state_eat_one failed."}
-            }
+        if rune_equal(state_char(&sub_state), self.char, self.case_sensitive) {
+            assert(state_eat_one(&sub_state))
             state_pre_exec(state, pos, sub_state.cur, loc)
             res = parser_exec(state, self.exec)
             state_post_exec(state, sub_state.loc)
@@ -137,12 +147,14 @@ lit_c :: proc(
     }
     parser := parser_create(LitCParser, name, parse, skip, exec)
     parser.char = char
+    parser.case_sensitive = case_sensitive
     return parser
 }
 
 LitStrParser :: struct {
     using parser: Parser,
     str: string,
+    case_sensitive: bool,
 }
 
 lit_str :: proc(
@@ -150,6 +162,7 @@ lit_str :: proc(
     skip: SkipCtx = SKIP,
     exec: ExecProc = nil,
     name: string = "lit",
+    case_sensitive := true,
 ) -> ^Parser {
     parse := proc(parser: ^Parser, state: ^ParserState) -> (res: ParseResult, err: ParserError) {
         self := cast(^LitStrParser)parser
@@ -157,12 +170,10 @@ lit_str :: proc(
         pos, loc := parser_skip(&sub_state, self.skip)
 
         for c in self.str {
-            if state_eof(&sub_state) || state_char(&sub_state) != c {
+            if state_eof(&sub_state) || !rune_equal(state_char(&sub_state), c, self.case_sensitive) {
                 return nil, syntax_error(state, "expected literal `{}`", self.str)
             }
-            if ok := state_eat_one(&sub_state); !ok {
-                return nil, InternalError{"state_eat_one failed."}
-            }
+            assert(state_eat_one(&sub_state))
         }
         state_pre_exec(state, pos, sub_state.cur, loc)
         res = parser_exec(state, self.exec)
@@ -171,6 +182,7 @@ lit_str :: proc(
     }
     parser := parser_create(LitStrParser, name, parse, skip, exec)
     parser.str = str
+    parser.case_sensitive = case_sensitive
     return parser
 }
 
