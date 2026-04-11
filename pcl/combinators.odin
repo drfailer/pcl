@@ -400,6 +400,9 @@ rec :: proc(parser: ^Parser) -> ^Parser {
         defer if ok do state.pcl_handle.rd.top_nodes[recursive_rule] = old_top_nodes
 
         if res, err = parser_parse(state, self.parsers[0]); err != nil {
+            if recursive_rule in state.pcl_handle.rd.top_nodes {
+                assert(state.pcl_handle.rd.top_nodes[recursive_rule] == nil);
+            }
             return nil, err
         }
         return res, nil
