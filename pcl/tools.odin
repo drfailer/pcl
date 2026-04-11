@@ -2,6 +2,7 @@ package pcl
 
 import "core:mem"
 import "core:log"
+import "base:runtime"
 
 // memory pool /////////////////////////////////////////////////////////////////
 
@@ -12,6 +13,7 @@ MemoryPoolNode :: struct($T: typeid) {
     data: T,
     next: ^MemoryPoolNode(T),
     prev: ^MemoryPoolNode(T),
+    loc: runtime.Source_Code_Location,
 }
 
 MemoryPool :: struct($T: typeid) {
@@ -51,6 +53,7 @@ memory_pool_destroy_impl :: proc(pool: ^MemoryPool($T), $debug: bool) {
     }
     node = pool.used_nodes
     for node != nil {
+        log.warn("non released node, allocated at:", node.loc)
         when debug {
             nb_nodes += 1
         }
@@ -73,7 +76,7 @@ memory_pool_destroy_debug :: proc(pool: ^MemoryPool($T)) {
     memory_pool_destroy_impl(pool, true)
 }
 
-memory_pool_allocate :: proc(pool: ^MemoryPool($T)) -> ^T {
+memory_pool_allocate :: proc(pool: ^MemoryPool($T), loc := #caller_location) -> ^T {
     if pool.free_nodes == nil {
         node := new(MemoryPoolNode(T), pool.allocator)
         node.next = pool.free_nodes
@@ -83,6 +86,7 @@ memory_pool_allocate :: proc(pool: ^MemoryPool($T)) -> ^T {
     pool.free_nodes = node.next
     node.prev = nil
     node.next = pool.used_nodes
+    node.loc = loc
     if node.next != nil {
         node.next.prev = node
     }
