@@ -6,14 +6,21 @@ import "core:os"
 
 PCLHandle :: struct {
     // TODO: error_stack: [dynamic]ParserError
-    rd: RecursionData,
     branch_depth: u64,
+    lrec_depth: u64,
+    do_not_exec: bool,
     error_allocator: mem.Allocator,
-    tree_arena: mem.Dynamic_Arena,
-    tree_allocator: mem.Allocator, // TODO: this should be a pool
+    // parser allocator
+    parser_arena: mem.Dynamic_Arena,
+    parser_allocator: mem.Allocator,
+    // result allocator
+    result_arena: mem.Dynamic_Arena,
+    result_allocator: mem.Allocator,
+    // exec tree allocator
     exec_arena: mem.Dynamic_Arena,
     exec_allocator: mem.Allocator,
     exec_node_pool: MemoryPool(ExecTreeNode),
+    // other infos
     user_data: rawptr,
     current_grammar: ^Parser,
 }
@@ -21,14 +28,13 @@ PCLHandle :: struct {
 handle_create :: proc() -> (pcl_handle: ^PCLHandle) {
     pcl_handle = new(PCLHandle)
 
-    pcl_handle.rd = RecursionData{
-        depth = 0,
-        top_nodes = make(map[^Parser]ParseResult),
-    }
+    // allocator for the parser graph (optionaly used by the user)
+    mem.dynamic_arena_init(&pcl_handle.parser_arena)
+    pcl_handle.parser_allocator = mem.dynamic_arena_allocator(&pcl_handle.parser_arena)
 
     // allocator for the exec tree
-    mem.dynamic_arena_init(&pcl_handle.tree_arena)
-    pcl_handle.tree_allocator = mem.dynamic_arena_allocator(&pcl_handle.tree_arena)
+    mem.dynamic_arena_init(&pcl_handle.result_arena)
+    pcl_handle.result_allocator = mem.dynamic_arena_allocator(&pcl_handle.result_arena)
 
     // allocator for the execution
     mem.dynamic_arena_init(&pcl_handle.exec_arena)
@@ -39,21 +45,25 @@ handle_create :: proc() -> (pcl_handle: ^PCLHandle) {
 }
 
 handle_destroy :: proc(pcl_handle: ^PCLHandle) {
-    delete(pcl_handle.rd.top_nodes)
-    memory_pool_destroy_debug(&pcl_handle.exec_node_pool)
+    memory_pool_destroy(&pcl_handle.exec_node_pool)
     mem.dynamic_arena_destroy(&pcl_handle.exec_arena)
-    mem.dynamic_arena_destroy(&pcl_handle.tree_arena)
+    mem.dynamic_arena_destroy(&pcl_handle.result_arena)
+    mem.dynamic_arena_destroy(&pcl_handle.parser_arena)
     free(pcl_handle)
 }
 
 handle_reset :: proc(pcl_handle: ^PCLHandle) {
-    free_all(pcl_handle.tree_allocator)
+    free_all(pcl_handle.result_allocator)
     free_all(pcl_handle.exec_allocator)
     pcl_handle.exec_node_pool = memory_pool_create(ExecTreeNode, 0, pcl_handle.exec_allocator)
 }
 
 handle_grammar :: proc(pcl_handle: ^PCLHandle) -> ^Parser {
     return pcl_handle.current_grammar
+}
+
+handle_parser_allocator :: proc(pcl_handle: ^PCLHandle) -> mem.Allocator {
+    return pcl_handle.parser_allocator
 }
 
 // parse api ///////////////////////////////////////////////////////////////////
@@ -111,9 +121,8 @@ parse_file :: proc(
     user_data: rawptr = nil,
     allocator := context.allocator, // we need to create the string
 ) -> (filecontent: string, state: ParserState, res: ExecResult, ok: bool) {
-    data: []u8
-	data, ok = os.read_entire_file(filepath, allocator)
-	if !ok {
+	data, err := os.read_entire_file(filepath, allocator)
+	if err != nil {
 		// could not read file
 		return
 	}

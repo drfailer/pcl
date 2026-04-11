@@ -8,8 +8,7 @@ import "core:testing"
 test_bracket :: proc(t: ^testing.T) {
     pcl_handle := pcl.handle_create()
     defer pcl.handle_destroy(pcl_handle)
-    parser_allocator := pcl.parser_allocator_create()
-    defer pcl.parser_allocator_destroy(parser_allocator)
+    parser_allocator := pcl.handle_parser_allocator(pcl_handle)
     parser: ^pcl.Parser
 
     {
@@ -34,8 +33,7 @@ test_bracket :: proc(t: ^testing.T) {
 test_quotes :: proc(t: ^testing.T) {
     pcl_handle := pcl.handle_create()
     defer pcl.handle_destroy(pcl_handle)
-    parser_allocator := pcl.parser_allocator_create()
-    defer pcl.parser_allocator_destroy(parser_allocator)
+    parser_allocator := pcl.handle_parser_allocator(pcl_handle)
     parser: ^pcl.Parser
 
     {
@@ -54,8 +52,7 @@ test_quotes :: proc(t: ^testing.T) {
 print_bracket :: proc() {
     pcl_handle := pcl.handle_create()
     defer pcl.handle_destroy(pcl_handle)
-    parser_allocator := pcl.parser_allocator_create()
-    defer pcl.parser_allocator_destroy(parser_allocator)
+    parser_allocator := pcl.handle_parser_allocator(pcl_handle)
     parser: ^pcl.Parser
 
     {
@@ -75,8 +72,7 @@ print_bracket :: proc() {
 print_quotes :: proc() {
     pcl_handle := pcl.handle_create()
     defer pcl.handle_destroy(pcl_handle)
-    parser_allocator := pcl.parser_allocator_create()
-    defer pcl.parser_allocator_destroy(parser_allocator)
+    parser_allocator := pcl.handle_parser_allocator(pcl_handle)
     parser: ^pcl.Parser
 
     {

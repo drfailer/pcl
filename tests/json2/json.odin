@@ -159,8 +159,7 @@ json_grammar :: proc(allocator: pcl.ParserAllocator) -> ^pcl.Parser {
 test_object :: proc(t: ^testing.T) {
     pcl_handle := pcl.handle_create()
     defer pcl.handle_destroy(pcl_handle)
-    parser_allocator := pcl.parser_allocator_create()
-    defer pcl.parser_allocator_destroy(parser_allocator)
+    parser_allocator := pcl.handle_parser_allocator(pcl_handle)
     json_parser := json_grammar(parser_allocator)
 
     exec_arena_data: [16384]byte
@@ -216,8 +215,7 @@ test_object :: proc(t: ^testing.T) {
 main :: proc() {
     pcl_handle := pcl.handle_create()
     defer pcl.handle_destroy(pcl_handle)
-    parser_allocator := pcl.parser_allocator_create()
-    defer pcl.parser_allocator_destroy(parser_allocator)
+    parser_allocator := pcl.handle_parser_allocator(pcl_handle)
     json_parser := json_grammar(parser_allocator)
 
     exec_arena_data: [16384]byte

@@ -366,7 +366,10 @@ line_starting_with :: proc(
         pos, loc := parser_skip(&sub_state, self.skip)
 
         if len(self.parsers) > 0 && self.parsers[0] != nil {
-            if res, err = parser_parse(&sub_state, self.parsers[0]); err != nil {
+            state.pcl_handle.do_not_exec = true
+            res, err = parser_parse(&sub_state, self.parsers[0])
+            state.pcl_handle.do_not_exec = false
+            if err != nil {
                 return nil, err
             }
         }
@@ -379,7 +382,7 @@ line_starting_with :: proc(
 
         // exec
         state_pre_exec(state, pos, sub_state.cur, loc)
-        res = parser_exec(state, self.exec) // TODO: the previous result is discarded
+        res = parser_exec(state, self.exec)
         state_post_exec(state, sub_state.loc)
         return res, nil
     }
@@ -408,7 +411,7 @@ separated_items :: proc(
         self := cast(^SeparatedItemsParser)parser
         sub_state := state^
         pos, loc := parser_skip(&sub_state, self.skip)
-        results := make([dynamic]ParseResult, allocator = state.pcl_handle.tree_allocator)
+        results := make([dynamic]ParseResult, allocator = state.pcl_handle.result_allocator)
         trailing := false
 
         for {
@@ -436,7 +439,7 @@ separated_items :: proc(
                                      self.name, self.separator)
         }
         state_pre_exec(state, pos, sub_state.cur, loc)
-        res = parser_exec(state, self.exec, results, flags = {.ListResult})
+        res = parser_exec(state, self.exec, results, flags = bit_set[ExecFlag]{.ListResult})
         state_post_exec(state, sub_state.loc)
         return res, nil
     }

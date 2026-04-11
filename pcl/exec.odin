@@ -47,6 +47,22 @@ ExecData :: struct {
 
 ExecProc :: proc(data: ^ExecData) -> ExecResult
 
+// constructor & destructor ////////////////////////////////////////////////////
+
+release_exec_tree :: proc(node_pool: ^MemoryPool(ExecTreeNode), result: ParseResult) {
+    #partial switch r in result {
+    case (^ExecTreeNode):
+        if r == nil do return
+        #reverse for child in r.childs {
+            release_exec_tree(node_pool, child)
+        }
+        delete(r.childs)
+        memory_pool_release(node_pool, r)
+    }
+}
+
+// tree execution //////////////////////////////////////////////////////////////
+
 exec_tree_exec :: proc(
     root: ^ExecTreeNode,
     user_data: rawptr,

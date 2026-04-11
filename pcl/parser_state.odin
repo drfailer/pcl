@@ -37,6 +37,16 @@ state_leave_branch :: proc(state: ^ParserState) {
     state.pcl_handle.branch_depth -= 1
 }
 
+state_enter_lrec :: proc(state: ^ParserState, parser: ^LRecParser) {
+    parser.depth += 1
+    state.pcl_handle.lrec_depth += 1
+}
+
+state_leave_lrec :: proc(state: ^ParserState, parser: ^LRecParser) {
+    parser.depth -= 1
+    state.pcl_handle.lrec_depth -= 1
+}
+
 state_pre_exec :: proc(state: ^ParserState, pos, cur: int, loc: Location) {
     state.pos = pos
     state.cur = cur

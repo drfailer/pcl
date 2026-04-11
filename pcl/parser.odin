@@ -23,18 +23,6 @@ ParseProc :: proc(self: ^Parser, state: ^ParserState) -> (res: ParseResult, err:
 
 ParserAllocator :: mem.Allocator
 
-parser_allocator_create :: proc() -> ParserAllocator {
-    arena := new(mem.Dynamic_Arena)
-    mem.dynamic_arena_init(arena)
-    return mem.dynamic_arena_allocator(arena)
-}
-
-parser_allocator_destroy :: proc(allocator: ParserAllocator) {
-    arena := cast(^mem.Dynamic_Arena)allocator.data
-    mem.dynamic_arena_destroy(arena)
-    free(arena)
-}
-
 parser_create_from_dynamic_array_generic :: proc(
     $T: typeid,
     name: string,
@@ -186,24 +174,38 @@ parser_exec_with_childs :: proc(
     exec: ExecProc,
     childs: [dynamic]ParseResult,
     flags: bit_set[ExecFlag] = {},
+    loc := #caller_location,
 ) -> ParseResult {
-    loc := state.loc
+    if state.pcl_handle.do_not_exec do return nil
     pr: ParseResult
-    pr = memory_pool_allocate(&state.pcl_handle.exec_node_pool)
+    pr = memory_pool_allocate(&state.pcl_handle.exec_node_pool, loc)
     pr.(^ExecTreeNode).ctx = ExecContext{exec, state^}
     pr.(^ExecTreeNode).flags = flags
     pr.(^ExecTreeNode).childs = childs
     return pr
 }
 
-parser_exec_with_child :: proc(state: ^ParserState, exec: ExecProc, result: ParseResult, flags: bit_set[ExecFlag] = {}) -> ParseResult {
-    results := make([dynamic]ParseResult, allocator = state.pcl_handle.tree_allocator)
+parser_exec_with_child :: proc(
+    state: ^ParserState,
+    exec: ExecProc,
+    result: ParseResult,
+    flags: bit_set[ExecFlag] = {},
+    loc := #caller_location,
+) -> ParseResult {
+    if state.pcl_handle.do_not_exec do return nil
+    results := make([dynamic]ParseResult, allocator = state.pcl_handle.result_allocator)
     append(&results, result)
-    return parser_exec_with_childs(state, exec, results, flags)
+    return parser_exec_with_childs(state, exec, results, flags, loc = loc)
 }
 
-parser_exec_no_child :: proc(state: ^ParserState, exec: ExecProc, flags: bit_set[ExecFlag] = {}) -> ParseResult {
-    return parser_exec_with_childs(state, exec, [dynamic]ParseResult{}, flags)
+parser_exec_no_child :: proc(
+    state: ^ParserState,
+    exec: ExecProc,
+    flags: bit_set[ExecFlag] = {},
+    loc := #caller_location,
+) -> ParseResult {
+    if state.pcl_handle.do_not_exec do return nil
+    return parser_exec_with_childs(state, exec, [dynamic]ParseResult{}, flags, loc = loc)
 }
 
 parser_exec :: proc {

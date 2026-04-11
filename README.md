@@ -31,38 +31,33 @@ left-recursion: the current implementation is unoptimized and I don't guaranty
 that it will work in every cases, but it here :D.
 
 ```odin
-arithmetic_expr_grammar :: proc() -> ^pcl.Parser {
+arithmetic_expr_grammar :: proc(allocator: pcl.ParserAllocator) -> ^pcl.Parser {
     using pcl
+    context.allocator = allocator
 
-    pcl.SKIP = skip_any_of(" \n")
-
-    // pre-declare the expression parser (because of the recursion)
-    expr := declare(name = "expr")
-
-    // numbers
     digits := plus(range('0', '9'), name = "digits")
     ints := combine(digits, name = "ints", exec = exec_value(i32))
     floats := combine(digits, '.', opt(digits), name = "floats", exec = exec_value(f32))
 
-    // factor
-    parent := seq('(', rec(expr), ')', name = "parent", exec = exec_parent)
+    pcl.SKIP = skip_any_of(" \n")
+
+    expr := declare_lrec(name = "expr")
+
+    parent := seq('(', expr, ')', name = "parent", exec = exec_parent)
     sin := seq("sin", parent, exec = exec_function(.Sin))
     cos := seq("cos", parent, exec = exec_function(.Cos))
     tan := seq("tan", parent, exec = exec_function(.Tan))
     functions := or(cos, sin, tan)
     factor := or(floats, ints, parent, functions, name = "factor")
 
-    // term
-    term := declare(name = "term")
+    term := declare_lrec(name = "term")
     mul := lrec(term, '*', factor, exec = exec_operator(.Mul))
     div := lrec(term, '/', factor, exec = exec_operator(.Div))
     define(term, or(mul, div, factor))
 
-    // expression
     add := lrec(expr, '+', term, exec = exec_operator(.Add))
     sub := lrec(expr, '-', term, exec = exec_operator(.Sub))
     define(expr, or(add, sub, term))
-
     return expr
 }
 ```
@@ -72,23 +67,33 @@ Parse a test string:
 ```odin
 pcl_handle := pcl.handle_create()
 defer pcl.handle_destroy(pcl_handle)
-parser: ^pcl.Parser
-parser_arena: mem.Dynamic_Arena
-mem.dynamic_arena_init(&parser_arena)
-defer mem.dynamic_arena_destroy(&parser_arena)
-// For simplicity, the parser constructors use the context allocator, however,
-// pcl doesn't provide a parser_destroy function since parsers can be referenced
-// multiple times in the grammar tree. The user knows the grammar structure and
-// therefore is in charge of destroying the parsers himself.
-{
-    context.allocator = mem.dynamic_arena_allocator(&parser_arena)
-    parser = arithmetic_expr_grammar()
-}
+parser_allocator := pcl.handle_parser_allocator(handle) // pcl gives a parser allocator
+arithmetic_parser := arithmetic_grammar(parser_allocator)
 
 ctx: MyCustomContext
 
 // parse a string
 state, res, ok = pcl.parse_string(pcl_handle, parser, "sin(1 - (2 + 3*12.4)) - 3*3 - cos(3*4) + 4/2 + (2 + 2)", &ctx)
+node_print(pcl.content(res, ^Node)) // get the content as a `^Node`
+```
+
+## Parser allocation
+
+The parser is stored as a graph in which each node contains a parse function,
+and a list of sub-parsers. The parser graph can contain cycles and custom nodes
+that are define by the user (custom parsers). For these reasons, the parser
+graph is considered as a user property, therefore, the user is responsible to
+deallocate the nodes of the graph. This has been done for simplicity reasons
+because:
+1. Handling cycles would require extra work for the deallocation.
+2. Users can create their own parsers, and handling the deallocation would
+   imply adding an `on_destroy` callback.
+Even though the user is responsible to deallocate the parsers, PCL provides an
+arena that can be used to allocate parsers if needed (which still requires to
+set the context allocator, so the user keep full control).
+
+```odin
+parser_allocator := pcl.handle_parser_allocator(handle)
 ```
 
 ## The `exec` functions
@@ -111,7 +116,7 @@ The data pointer taken as input can be used with different functions:
   sub tree, and cast it to the give type.
 - `contents(data, idx..)`: retrieve a list of sub-results at the given
   coordinate in a sub-tree.
-- `reuslt(data, value)`: create a result from a value.
+- `result(data, value)`: create a result from a value.
 
 Note that the `content` and `result` work with both values and pointers.
 However! Since the parser result type is not generic, the underlying
