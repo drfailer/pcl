@@ -2,6 +2,7 @@ package pcl
 
 import "core:mem"
 import "core:log"
+import "core:strings"
 import "base:runtime"
 
 // memory pool /////////////////////////////////////////////////////////////////
@@ -127,12 +128,5 @@ memory_pool_release_from_root :: proc(pool: ^MemoryPool($T), root_data: ^T) {
 // parsing utilities ///////////////////////////////////////////////////////////
 
 cursor_on_string :: proc(state: ^ParserState, $prefix: string) -> bool {
-    state_idx := state.cur
-    for c, idx in prefix {
-        if state_idx > len(state.content) || state_char_at(state, state_idx) != c {
-            return false
-        }
-        state_idx += 1
-    }
-    return true
+    return strings.has_prefix(state.content[state.cur:], prefix);
 }
