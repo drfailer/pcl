@@ -73,7 +73,7 @@ arithmetic_parser := arithmetic_grammar(parser_allocator)
 ctx: MyCustomContext
 
 // parse a string
-state, res, ok = pcl.parse_string(pcl_handle, parser, "sin(1 - (2 + 3*12.4)) - 3*3 - cos(3*4) + 4/2 + (2 + 2)", &ctx)
+res, ok = pcl.parse_string(pcl_handle, parser, "sin(1 - (2 + 3*12.4)) - 3*3 - cos(3*4) + 4/2 + (2 + 2)", &ctx)
 node_print(pcl.content(res, ^Node)) // get the content as a `^Node`
 ```
 

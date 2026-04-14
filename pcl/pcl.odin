@@ -73,7 +73,7 @@ parse_string :: proc(
     parser: ^Parser,
     str: ^string,
     user_data: rawptr = nil,
-) -> (state: ParserState, res: ExecResult, ok: bool) {
+) -> (res: ExecResult, ok: bool) {
     // set the user data
     pcl_handle.user_data = user_data
     pcl_handle.current_grammar = parser
@@ -86,7 +86,7 @@ parse_string :: proc(
     defer pcl_handle.error_allocator = mem.Allocator{}
 
     // execute the given parser on the string and print error
-    state = state_create(str, pcl_handle)
+    state := state_create(str, pcl_handle)
     parse_result, err := parser_parse(&state, parser)
 
     // make sure there are no trailing skipable runes
@@ -108,7 +108,7 @@ parse_string :: proc(
         case(ExecResult): res = result
         }
     }
-    return state, res, ok
+    return res, ok
 }
 
 // Since the parser can generate tokens that contain substrings that are just
@@ -120,13 +120,13 @@ parse_file :: proc(
     filepath: string,
     user_data: rawptr = nil,
     allocator := context.allocator, // we need to create the string
-) -> (filecontent: string, state: ParserState, res: ExecResult, ok: bool) {
+) -> (filecontent: string, res: ExecResult, ok: bool) {
 	data, err := os.read_entire_file(filepath, allocator)
 	if err != nil {
 		// could not read file
 		return
 	}
     filecontent = string(data)
-    state, res, ok = parse_string(pcl_handle, parser, &filecontent, user_data)
-    return filecontent, state, res, ok
+    res, ok = parse_string(pcl_handle, parser, &filecontent, user_data)
+    return filecontent, res, ok
 }

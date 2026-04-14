@@ -239,7 +239,7 @@ print_tree_of_expression :: proc(str: string) {
     exec_data := ExecData{ mem.arena_allocator(&node_arena) }
 
     str := str
-    state, res, ok := pcl.parse_string(pcl_handle, arithmetic_parser, &str, &exec_data)
+    res, ok := pcl.parse_string(pcl_handle, arithmetic_parser, &str, &exec_data)
     if !ok {
         fmt.printfln("parsing the expression `{}` failed.", str)
         return
@@ -261,7 +261,7 @@ test_numbers :: proc(t: ^testing.T) {
     exec_data := ExecData{ mem.arena_allocator(&node_arena) }
 
     str := "123"
-    state, res, ok := pcl.parse_string(pcl_handle, arithmetic_parser, &str, &exec_data)
+    res, ok := pcl.parse_string(pcl_handle, arithmetic_parser, &str, &exec_data)
     testing.expect(t, ok == true)
     testing.expect(t, node_eval(pcl.content(res, ^Node)) == 123)
 
@@ -269,7 +269,7 @@ test_numbers :: proc(t: ^testing.T) {
 
     pcl.handle_reset(pcl_handle)
     str = "3.14"
-    state, res, ok = pcl.parse_string(pcl_handle, arithmetic_parser, &str, &exec_data)
+    res, ok = pcl.parse_string(pcl_handle, arithmetic_parser, &str, &exec_data)
     testing.expect(t, ok == true)
     testing.expect(t, node_eval(pcl.content(res, ^Node)) == 3.14)
 }
@@ -287,7 +287,7 @@ test_operation :: proc(t: ^testing.T) {
     exec_data := ExecData{ mem.arena_allocator(&node_arena) }
 
     str := "1 - 2 + 3"
-    state, res, ok := pcl.parse_string(pcl_handle, arithmetic_parser, &str, &exec_data)
+    res, ok := pcl.parse_string(pcl_handle, arithmetic_parser, &str, &exec_data)
     testing.expect(t, ok == true)
     testing.expect(t, node_eval(pcl.content(res, ^Node)) == (1 - 2 + 3))
 
@@ -295,7 +295,7 @@ test_operation :: proc(t: ^testing.T) {
 
     pcl.handle_reset(pcl_handle)
     str = "(1 - 2) - 3*3 + 4/2"
-    state, res, ok = pcl.parse_string(pcl_handle, arithmetic_parser, &str, &exec_data)
+    res, ok = pcl.parse_string(pcl_handle, arithmetic_parser, &str, &exec_data)
     testing.expect(t, ok == true)
     testing.expect(t, node_eval(pcl.content(res, ^Node)) == ((1 - 2) - 3*3 + 4/2))
 }
@@ -313,7 +313,7 @@ test_functions :: proc(t: ^testing.T) {
     exec_data := ExecData{ mem.arena_allocator(&node_arena) }
 
     str := "sin(3.14)"
-    state, res, ok := pcl.parse_string(pcl_handle, arithmetic_parser, &str, &exec_data)
+    res, ok := pcl.parse_string(pcl_handle, arithmetic_parser, &str, &exec_data)
     testing.expect(t, ok == true)
     testing.expect(t, node_eval(pcl.content(res, ^Node)) == math.sin_f32(3.14))
 
@@ -321,7 +321,7 @@ test_functions :: proc(t: ^testing.T) {
 
     pcl.handle_reset(pcl_handle)
     str = "sin(1 - (2 + 3*12.4)) - 3*3 - cos(3*4) + 4/2 + (2 + 2)"
-    state, res, ok = pcl.parse_string(pcl_handle, arithmetic_parser, &str, &exec_data)
+    res, ok = pcl.parse_string(pcl_handle, arithmetic_parser, &str, &exec_data)
     testing.expect(t, ok == true)
     eval := node_eval(pcl.content(res, ^Node))
     expected := math.sin_f32(1 - (2 + 3*12.4)) - 3*3 - math.cos_f32(3*4) + 4/2 + (2 + 2)

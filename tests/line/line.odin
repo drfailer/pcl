@@ -22,7 +22,7 @@ doxygen :: proc(t: ^testing.T) {
         /// @brief test
         /// @param foo Foo param.
         /// @return Value.`
-    state, result, ok := pcl.parse_string(pcl_handle, parser, &str)
+    result, ok := pcl.parse_string(pcl_handle, parser, &str)
 
     testing.expect(t, ok)
     testing.expect(t, pcl.content_len(result) == 3)

@@ -71,6 +71,8 @@ state_create :: proc(content: ^string, pcl_handle: ^PCLHandle) -> ParserState {
 state_destroy :: proc(state: ^ParserState) {
 }
 
+// TODO: we should have eat function that don't look for \n (redundant)
+
 state_eat_one :: proc(state: ^ParserState) -> (ok: bool) {
     if state.cur >= len(state.content^) do return false
     if state_char(state) == '\n' {
