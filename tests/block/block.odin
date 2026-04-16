@@ -21,7 +21,7 @@ test_bracket :: proc(t: ^testing.T) {
         {
             printf("}\n");
         }`
-    result, ok := pcl.parse_string(pcl_handle, parser, &str)
+    result, ok := pcl.parse_string(pcl_handle, parser, str)
 
     testing.expect(t, ok)
     testing.expect(t, pcl.content(result) == `
@@ -43,7 +43,7 @@ test_quotes :: proc(t: ^testing.T) {
     }
 
     str := `" printf(\"\"); "`
-    result, ok := pcl.parse_string(pcl_handle, parser, &str)
+    result, ok := pcl.parse_string(pcl_handle, parser, str)
 
     testing.expect(t, ok)
     testing.expect(t, pcl.content(result) == ` printf(\"\"); `)
@@ -64,7 +64,7 @@ print_bracket :: proc() {
         {
             printf("}\n");
         }`
-    result, ok := pcl.parse_string(pcl_handle, parser, &str)
+    result, ok := pcl.parse_string(pcl_handle, parser, str)
 
     fmt.printfln("result = {}", result)
 }
@@ -82,7 +82,7 @@ print_quotes :: proc() {
     }
 
     str := `" printf(\"\"); "`
-    result, ok := pcl.parse_string(pcl_handle, parser, &str)
+    result, ok := pcl.parse_string(pcl_handle, parser, str)
 
     fmt.printfln("result = {}", result)
 }

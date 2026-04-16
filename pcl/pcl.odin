@@ -71,7 +71,7 @@ handle_parser_allocator :: proc(handle: ^PCLHandle) -> mem.Allocator {
 parse_string :: proc(
     handle: ^PCLHandle,
     parser: ^Parser,
-    str: ^string,
+    str: string,
     user_data: rawptr = nil,
 ) -> (res: ExecResult, ok: bool) {
     // set the user data
@@ -87,7 +87,7 @@ parse_string :: proc(
 
     // execute the given parser on the string and print error
     global_state := ParserGlobalState{
-        content = str^,
+        content = str,
         handle = handle,
     }
     state := state_create(&global_state)
@@ -131,6 +131,6 @@ parse_file :: proc(
 		return
 	}
     filecontent = string(data)
-    res, ok = parse_string(handle, parser, &filecontent, user_data)
+    res, ok = parse_string(handle, parser, filecontent, user_data)
     return filecontent, res, ok
 }
