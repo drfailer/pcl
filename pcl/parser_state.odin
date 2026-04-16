@@ -15,12 +15,6 @@ Location :: struct {
     file: string,
 }
 
-// used for left recursive grammars
-RecursionData :: struct {
-    depth: u64,
-    top_nodes: map[^Parser]ParseResult,
-}
-
 ParserState :: struct {
     content: ^string,
     pos: int,
