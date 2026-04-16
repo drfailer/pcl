@@ -25,9 +25,7 @@ apply_predicate :: proc(
     }
 
     if pred(state_char(&sub_state)) {
-        if ok := state_eat_one(&sub_state); !ok {
-            return nil, InternalError{"state_eat_one failed."}
-        }
+        state_eat_unsafe(&sub_state)
         state_pre_exec(state, pos, sub_state.cur, loc)
         res = parser_exec(state, self.exec)
         state_post_exec(state, sub_state.loc)
@@ -136,7 +134,7 @@ lit_c :: proc(
         }
 
         if rune_equal(state_char(&sub_state), self.char, self.case_sensitive) {
-            assert(state_eat_one(&sub_state))
+            state_eat_unsafe(&sub_state)
             state_pre_exec(state, pos, sub_state.cur, loc)
             res = parser_exec(state, self.exec)
             state_post_exec(state, sub_state.loc)
@@ -173,7 +171,7 @@ lit_str :: proc(
             if state_eof(&sub_state) || !rune_equal(state_char(&sub_state), c, self.case_sensitive) {
                 return nil, syntax_error(state, "expected literal `{}`", self.str)
             }
-            assert(state_eat_one(&sub_state))
+            state_eat_unsafe(&sub_state)
         }
         state_pre_exec(state, pos, sub_state.cur, loc)
         res = parser_exec(state, self.exec)
@@ -227,7 +225,7 @@ block_char :: proc(
             return nil, syntax_error(state, "opening symbol not found in `{}({}, {})`.",
                                      self.name, opening, closing)
         }
-        state_eat_one(&sub_state)
+        state_eat_unsafe(&sub_state)
         append(&char_stack, closing)
 
         begin_cur := sub_state.cur
@@ -249,8 +247,8 @@ block_char :: proc(
             }
             if state_char(&sub_state) == '\\' {
                 escaped = true
-                state_eat_one(&sub_state)
-                state_eat_one(&sub_state)
+                state_eat_non_blank_unsafe(&sub_state)
+                state_eat_non_blank_unsafe(&sub_state)
                 continue
             }
 
@@ -302,7 +300,7 @@ block_char :: proc(
             } else if state_char(&sub_state) == opening_char {
                 append(&char_stack, closing_char)
             }
-            state_eat_one(&sub_state)
+            state_eat_unsafe(&sub_state)
         }
         state_pre_exec(state, begin_cur, end_cur, loc)
         res = parser_exec(state, self.exec)
@@ -348,7 +346,7 @@ block_str :: proc(
                 sub_state.cur += len(opening)
                 sub_state.loc.col += len(opening) // opening should not contain \n
             } else {
-                state_eat_one(&sub_state)
+                state_eat_unsafe(&sub_state)
             }
         }
         state_pre_exec(state, begin_cur, end_cur, loc)
@@ -388,9 +386,9 @@ line_starting_with :: proc(
 
         // get the rest of the line
         for !state_eof(&sub_state) && state_char(&sub_state) != '\n' {
-            state_eat_one(&sub_state)
+            state_eat_non_blank_unsafe(&sub_state)
         }
-        state_eat_one(&sub_state) // eat the '\n' (does nothing if eof)
+        state_eat(&sub_state) // eat the '\n' (does nothing if eof)
 
         // exec
         state_pre_exec(state, pos, sub_state.cur, loc)
@@ -438,7 +436,7 @@ separated_items :: proc(
             if state_eof(&sub_state) || state_char(&sub_state) != self.separator {
                 break
             }
-            state_eat_one(&sub_state)
+            state_eat_non_blank_unsafe(&sub_state)
             trailing = true
         }
 

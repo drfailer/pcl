@@ -23,7 +23,7 @@ skip_any_of :: proc($chars: string) -> SkipCtx {
     return SkipCtx{
         skip = proc(state: ^ParserState, data: rawptr) -> bool {
             if strings.contains_rune(chars, state_char(state)) {
-                state_eat_one(state) or_return
+                state_eat_unsafe(state)
                 return true
             }
             return false

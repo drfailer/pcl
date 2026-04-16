@@ -68,21 +68,7 @@ state_create :: proc(global_state: ^ParserGlobalState) -> ParserState {
 state_destroy :: proc(state: ^ParserState) {
 }
 
-// TODO: we should have eat function that don't look for \n (redundant)
-
-state_eat_one :: proc(state: ^ParserState) -> (ok: bool) {
-    if state.cur >= len(state.global_state.content) do return false
-    if state_char(state) == '\n' {
-        state.loc.row += 1
-        state.loc.col = 1
-    } else {
-        state.loc.col += 1
-    }
-    state.cur += 1
-    return true
-}
-
-state_eat_count :: proc(state: ^ParserState, count: int) -> (ok: bool) {
+state_eat :: proc(state: ^ParserState, count: int = 1) -> (ok: bool) {
     if state.cur + count >= len(state.global_state.content) do return false
     for _ in 0..<count {
         if state_char(state) == '\n' {
@@ -96,13 +82,26 @@ state_eat_count :: proc(state: ^ParserState, count: int) -> (ok: bool) {
     return true
 }
 
+state_eat_unsafe :: proc(state: ^ParserState, count: int = 1) {
+    if state_char(state) == '\n' {
+        state.loc.row += 1
+        state.loc.col = 1
+    } else {
+        state.loc.col += 1
+    }
+    state.cur += 1
+}
+
+state_eat_non_blank_unsafe :: proc(state: ^ParserState, count: int = 1) {
+    state.loc.row += count
+    state.cur += count
+}
+
 state_eof :: proc(state: ^ParserState) -> bool {
     return state.cur >= len(state.global_state.content)
 }
 
 state_char_at :: proc(state: ^ParserState, idx: int) -> rune {
-    assert(idx < len(state.global_state.content)) // top level functions are expected to  check for this beforehand
-    // return utf8.rune_at_pos(state.content^, idx)
     // TODO: using rune_at_pos is indeed very slow, we'll have to use a rune index at some point
     return cast(rune)state.global_state.content[idx]
 }
