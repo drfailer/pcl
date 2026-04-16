@@ -128,5 +128,5 @@ memory_pool_release_from_root :: proc(pool: ^MemoryPool($T), root_data: ^T) {
 // parsing utilities ///////////////////////////////////////////////////////////
 
 cursor_on_string :: proc(state: ^ParserState, $prefix: string) -> bool {
-    return strings.has_prefix(state.content[state.cur:], prefix);
+    return strings.has_prefix(state.global_state.content[state.cur:], prefix);
 }

@@ -25,68 +25,72 @@ PCLHandle :: struct {
     current_grammar: ^Parser,
 }
 
-handle_create :: proc() -> (pcl_handle: ^PCLHandle) {
-    pcl_handle = new(PCLHandle)
+handle_create :: proc() -> (handle: ^PCLHandle) {
+    handle = new(PCLHandle)
 
     // allocator for the parser graph (optionaly used by the user)
-    mem.dynamic_arena_init(&pcl_handle.parser_arena)
-    pcl_handle.parser_allocator = mem.dynamic_arena_allocator(&pcl_handle.parser_arena)
+    mem.dynamic_arena_init(&handle.parser_arena)
+    handle.parser_allocator = mem.dynamic_arena_allocator(&handle.parser_arena)
 
     // allocator for the exec tree
-    mem.dynamic_arena_init(&pcl_handle.result_arena)
-    pcl_handle.result_allocator = mem.dynamic_arena_allocator(&pcl_handle.result_arena)
+    mem.dynamic_arena_init(&handle.result_arena)
+    handle.result_allocator = mem.dynamic_arena_allocator(&handle.result_arena)
 
     // allocator for the execution
-    mem.dynamic_arena_init(&pcl_handle.exec_arena)
-    pcl_handle.exec_allocator = mem.dynamic_arena_allocator(&pcl_handle.exec_arena)
+    mem.dynamic_arena_init(&handle.exec_arena)
+    handle.exec_allocator = mem.dynamic_arena_allocator(&handle.exec_arena)
 
-    pcl_handle.exec_node_pool = memory_pool_create(ExecTreeNode, 0, pcl_handle.exec_allocator)
-    return pcl_handle
+    handle.exec_node_pool = memory_pool_create(ExecTreeNode, 0, handle.exec_allocator)
+    return handle
 }
 
-handle_destroy :: proc(pcl_handle: ^PCLHandle) {
-    memory_pool_destroy(&pcl_handle.exec_node_pool)
-    mem.dynamic_arena_destroy(&pcl_handle.exec_arena)
-    mem.dynamic_arena_destroy(&pcl_handle.result_arena)
-    mem.dynamic_arena_destroy(&pcl_handle.parser_arena)
-    free(pcl_handle)
+handle_destroy :: proc(handle: ^PCLHandle) {
+    memory_pool_destroy(&handle.exec_node_pool)
+    mem.dynamic_arena_destroy(&handle.exec_arena)
+    mem.dynamic_arena_destroy(&handle.result_arena)
+    mem.dynamic_arena_destroy(&handle.parser_arena)
+    free(handle)
 }
 
-handle_reset :: proc(pcl_handle: ^PCLHandle) {
-    free_all(pcl_handle.result_allocator)
-    free_all(pcl_handle.exec_allocator)
-    pcl_handle.exec_node_pool = memory_pool_create(ExecTreeNode, 0, pcl_handle.exec_allocator)
+handle_reset :: proc(handle: ^PCLHandle) {
+    free_all(handle.result_allocator)
+    free_all(handle.exec_allocator)
+    handle.exec_node_pool = memory_pool_create(ExecTreeNode, 0, handle.exec_allocator)
 }
 
-handle_grammar :: proc(pcl_handle: ^PCLHandle) -> ^Parser {
-    return pcl_handle.current_grammar
+handle_grammar :: proc(handle: ^PCLHandle) -> ^Parser {
+    return handle.current_grammar
 }
 
-handle_parser_allocator :: proc(pcl_handle: ^PCLHandle) -> mem.Allocator {
-    return pcl_handle.parser_allocator
+handle_parser_allocator :: proc(handle: ^PCLHandle) -> mem.Allocator {
+    return handle.parser_allocator
 }
 
 // parse api ///////////////////////////////////////////////////////////////////
 
 parse_string :: proc(
-    pcl_handle: ^PCLHandle,
+    handle: ^PCLHandle,
     parser: ^Parser,
     str: ^string,
     user_data: rawptr = nil,
 ) -> (res: ExecResult, ok: bool) {
     // set the user data
-    pcl_handle.user_data = user_data
-    pcl_handle.current_grammar = parser
+    handle.user_data = user_data
+    handle.current_grammar = parser
 
     // create the arena for the temporary allocations (error messages)
     bytes: [4096]u8
     error_arena: mem.Arena
     mem.arena_init(&error_arena, bytes[:])
-    pcl_handle.error_allocator = mem.arena_allocator(&error_arena)
-    defer pcl_handle.error_allocator = mem.Allocator{}
+    handle.error_allocator = mem.arena_allocator(&error_arena)
+    defer handle.error_allocator = mem.Allocator{}
 
     // execute the given parser on the string and print error
-    state := state_create(str, pcl_handle)
+    global_state := ParserGlobalState{
+        content = str^,
+        handle = handle,
+    }
+    state := state_create(&global_state)
     parse_result, err := parser_parse(&state, parser)
 
     // make sure there are no trailing skipable runes
@@ -103,8 +107,8 @@ parse_string :: proc(
     } else {
         switch result in parse_result {
         case(^ExecTreeNode): res = exec_tree_exec(result, user_data,
-                                                  pcl_handle.exec_allocator,
-                                                  &pcl_handle.exec_node_pool)
+                                                  handle.exec_allocator,
+                                                  &handle.exec_node_pool)
         case(ExecResult): res = result
         }
     }
@@ -115,7 +119,7 @@ parse_string :: proc(
 // slices of the whole parsed string, the lifetime of the file content should
 // be extended to the outer scope of this function.
 parse_file :: proc(
-    pcl_handle: ^PCLHandle,
+    handle: ^PCLHandle,
     parser: ^Parser,
     filepath: string,
     user_data: rawptr = nil,
@@ -127,6 +131,6 @@ parse_file :: proc(
 		return
 	}
     filecontent = string(data)
-    res, ok = parse_string(pcl_handle, parser, &filecontent, user_data)
+    res, ok = parse_string(handle, parser, &filecontent, user_data)
     return filecontent, res, ok
 }

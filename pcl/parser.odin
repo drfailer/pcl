@@ -130,14 +130,14 @@ ParserError :: union {
 
 internal_error :: proc(state: ^ParserState, str: string, args: ..any) -> ParserError {
     return InternalError{
-        fmt.aprintf(str, ..args, allocator = state.pcl_handle.error_allocator)
+        fmt.aprintf(str, ..args, allocator = state.global_state.handle.error_allocator)
     }
 }
 
 syntax_error :: proc(state: ^ParserState, str: string, args: ..any, fatal := false) -> ParserError {
     return SyntaxError{
         state^,
-        fmt.aprintf(str, ..args, allocator = state.pcl_handle.error_allocator),
+        fmt.aprintf(str, ..args, allocator = state.global_state.handle.error_allocator),
         fatal,
     }
 }
@@ -176,9 +176,9 @@ parser_exec_with_childs :: proc(
     flags: bit_set[ExecFlag] = {},
     loc := #caller_location,
 ) -> ParseResult {
-    if state.pcl_handle.do_not_exec do return nil
+    if state.global_state.handle.do_not_exec do return nil
     pr: ParseResult
-    pr = memory_pool_allocate(&state.pcl_handle.exec_node_pool, loc)
+    pr = memory_pool_allocate(&state.global_state.handle.exec_node_pool, loc)
     pr.(^ExecTreeNode).ctx = ExecContext{exec, state^}
     pr.(^ExecTreeNode).flags = flags
     pr.(^ExecTreeNode).childs = childs
@@ -192,8 +192,8 @@ parser_exec_with_child :: proc(
     flags: bit_set[ExecFlag] = {},
     loc := #caller_location,
 ) -> ParseResult {
-    if state.pcl_handle.do_not_exec do return nil
-    results := make([dynamic]ParseResult, allocator = state.pcl_handle.result_allocator)
+    if state.global_state.handle.do_not_exec do return nil
+    results := make([dynamic]ParseResult, allocator = state.global_state.handle.result_allocator)
     append(&results, result)
     return parser_exec_with_childs(state, exec, results, flags, loc = loc)
 }
@@ -204,7 +204,7 @@ parser_exec_no_child :: proc(
     flags: bit_set[ExecFlag] = {},
     loc := #caller_location,
 ) -> ParseResult {
-    if state.pcl_handle.do_not_exec do return nil
+    if state.global_state.handle.do_not_exec do return nil
     return parser_exec_with_childs(state, exec, [dynamic]ParseResult{}, flags, loc = loc)
 }
 

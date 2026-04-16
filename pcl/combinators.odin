@@ -32,12 +32,12 @@ create_parser_array :: proc(allocator: mem.Allocator, skip: SkipCtx, inputs: ..C
 }
 
 release_result :: proc(state: ^ParserState, result: ParseResult) {
-    release_exec_tree(&state.pcl_handle.exec_node_pool, result)
+    release_exec_tree(&state.global_state.handle.exec_node_pool, result)
 }
 
 release_results :: proc(state: ^ParserState, results: []ParseResult) {
     #reverse for result in results {
-        release_exec_tree(&state.pcl_handle.exec_node_pool, result)
+        release_exec_tree(&state.global_state.handle.exec_node_pool, result)
     }
 }
 
@@ -155,9 +155,9 @@ not :: proc(
     parse := proc(self: ^Parser, state: ^ParserState) -> (res: ParseResult, err: ParserError) {
         sub_state := state^
         parser_skip(&sub_state, self.skip)
-        state.pcl_handle.do_not_exec = true
+        state.global_state.handle.do_not_exec = true
         res, err = parser_parse(&sub_state, self.parsers[0])
-        state.pcl_handle.do_not_exec = false
+        state.global_state.handle.do_not_exec = false
         if err == nil {
             return nil, syntax_error(state, "not parser failed.")
         }
@@ -180,7 +180,7 @@ opt :: proc(
             if !parser_can_recover(err) {
                 return nil, err
             }
-            free_all(state.pcl_handle.error_allocator)
+            free_all(state.global_state.handle.error_allocator)
             res = ExecResult{"", state.loc}
             return parser_exec_with_child(state, self.exec, res), nil
         }
@@ -223,7 +223,7 @@ or :: proc(
             if !parser_can_recover(sub_err) {
                 return nil, sub_err
             }
-            free_all(state.pcl_handle.error_allocator)
+            free_all(state.global_state.handle.error_allocator)
         }
         return nil, syntax_error(state, "none of the rules in `{}` could be applied.", self.name)
     }
@@ -237,7 +237,7 @@ seq :: proc(
     name: string = "seq",
 ) -> ^Parser {
     parse := proc(self: ^Parser, state: ^ParserState) -> (res: ParseResult, err: ParserError) {
-        results := make([dynamic]ParseResult, allocator = state.pcl_handle.result_allocator)
+        results := make([dynamic]ParseResult, allocator = state.global_state.handle.result_allocator)
         sub_state := state^
         sub_res: ParseResult
         pos, loc := parser_skip(&sub_state, self.skip)
@@ -265,7 +265,7 @@ star :: proc(
     name: string = "star",
 ) -> ^Parser {
     parse := proc(self: ^Parser, state: ^ParserState) -> (res: ParseResult, err: ParserError) {
-        results := make([dynamic]ParseResult, allocator = state.pcl_handle.result_allocator)
+        results := make([dynamic]ParseResult, allocator = state.global_state.handle.result_allocator)
         sub_state := state^
         pos, loc := parser_skip(&sub_state, self.skip)
 
@@ -301,7 +301,7 @@ plus :: proc(
     name: string = "plus",
 ) -> ^Parser {
     parse := proc(self: ^Parser, state: ^ParserState) -> (res: ParseResult, err: ParserError) {
-        results := make([dynamic]ParseResult, allocator = state.pcl_handle.result_allocator)
+        results := make([dynamic]ParseResult, allocator = state.global_state.handle.result_allocator)
         sub_state := state^
         pos, loc := parser_skip(&sub_state, self.skip)
 
@@ -341,7 +341,7 @@ times :: proc(
     name: string = "times",
 ) -> ^Parser {
     parse := proc(self: ^Parser, state: ^ParserState) -> (res: ParseResult, err: ParserError) {
-        results := make([dynamic]ParseResult, allocator = state.pcl_handle.result_allocator)
+        results := make([dynamic]ParseResult, allocator = state.global_state.handle.result_allocator)
         sub_state := state^
         pos, loc := parser_skip(&sub_state, self.skip)
         count := 0
@@ -389,9 +389,9 @@ combine :: proc(
         sub_state := state^
         pos, loc := parser_skip(&sub_state, self.skip)
 
-        state.pcl_handle.do_not_exec = true
+        state.global_state.handle.do_not_exec = true
         res, err = parser_parse(&sub_state, self.parsers[0])
-        state.pcl_handle.do_not_exec = false
+        state.global_state.handle.do_not_exec = false
         if err != nil {
             return nil, err
         }
@@ -517,7 +517,7 @@ lrec_apply_middle_rules :: proc(self: ^Parser, state: ^ParserState) -> (results:
     middle_rules := self.parsers[1:len(self.parsers) - 1]
     res: ParseResult
 
-    results = make([dynamic]ParseResult, len(self.parsers), allocator = state.pcl_handle.result_allocator)
+    results = make([dynamic]ParseResult, len(self.parsers), allocator = state.global_state.handle.result_allocator)
     for parser, idx in middle_rules {
         parser_skip(state, self.skip)
         if res, err = parser_parse(state, parser); err != nil {

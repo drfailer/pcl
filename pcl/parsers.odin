@@ -378,9 +378,9 @@ line_starting_with :: proc(
         pos, loc := parser_skip(&sub_state, self.skip)
 
         if len(self.parsers) > 0 && self.parsers[0] != nil {
-            state.pcl_handle.do_not_exec = true
+            state.global_state.handle.do_not_exec = true
             res, err = parser_parse(&sub_state, self.parsers[0])
-            state.pcl_handle.do_not_exec = false
+            state.global_state.handle.do_not_exec = false
             if err != nil {
                 return nil, err
             }
@@ -423,7 +423,7 @@ separated_items :: proc(
         self := cast(^SeparatedItemsParser)parser
         sub_state := state^
         pos, loc := parser_skip(&sub_state, self.skip)
-        results := make([dynamic]ParseResult, allocator = state.pcl_handle.result_allocator)
+        results := make([dynamic]ParseResult, allocator = state.global_state.handle.result_allocator)
         trailing := false
 
         for {

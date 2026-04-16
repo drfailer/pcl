@@ -12,33 +12,37 @@ import "core:mem"
 Location :: struct {
     row: int,
     col: int,
+}
+
+ParserGlobalState :: struct {
     file: string,
+    content: string,
+    handle: ^PCLHandle,
 }
 
 ParserState :: struct {
-    content: ^string,
+    global_state: ^ParserGlobalState,
     pos: int,
     cur: int,
     loc: Location,
-    pcl_handle: ^PCLHandle,
 }
 
 state_enter_branch :: proc(state: ^ParserState) {
-    state.pcl_handle.branch_depth += 1
+    state.global_state.handle.branch_depth += 1
 }
 
 state_leave_branch :: proc(state: ^ParserState) {
-    state.pcl_handle.branch_depth -= 1
+    state.global_state.handle.branch_depth -= 1
 }
 
 state_enter_lrec :: proc(state: ^ParserState, parser: ^LRecParser) {
     parser.depth += 1
-    state.pcl_handle.lrec_depth += 1
+    state.global_state.handle.lrec_depth += 1
 }
 
 state_leave_lrec :: proc(state: ^ParserState, parser: ^LRecParser) {
     parser.depth -= 1
-    state.pcl_handle.lrec_depth -= 1
+    state.global_state.handle.lrec_depth -= 1
 }
 
 state_pre_exec :: proc(state: ^ParserState, pos, cur: int, loc: Location) {
@@ -52,13 +56,12 @@ state_post_exec :: proc(state: ^ParserState, loc: Location) {
     state.loc = loc
 }
 
-state_create :: proc(content: ^string, pcl_handle: ^PCLHandle) -> ParserState {
+state_create :: proc(global_state: ^ParserGlobalState) -> ParserState {
     return ParserState{
-        content = content,
+        global_state = global_state,
         pos = 0,
         cur = 0,
-        loc = Location{1, 1, ""},
-        pcl_handle = pcl_handle,
+        loc = Location{1, 1},
     }
 }
 
@@ -68,7 +71,7 @@ state_destroy :: proc(state: ^ParserState) {
 // TODO: we should have eat function that don't look for \n (redundant)
 
 state_eat_one :: proc(state: ^ParserState) -> (ok: bool) {
-    if state.cur >= len(state.content^) do return false
+    if state.cur >= len(state.global_state.content) do return false
     if state_char(state) == '\n' {
         state.loc.row += 1
         state.loc.col = 1
@@ -80,7 +83,7 @@ state_eat_one :: proc(state: ^ParserState) -> (ok: bool) {
 }
 
 state_eat_count :: proc(state: ^ParserState, count: int) -> (ok: bool) {
-    if state.cur + count >= len(state.content^) do return false
+    if state.cur + count >= len(state.global_state.content) do return false
     for _ in 0..<count {
         if state_char(state) == '\n' {
             state.loc.row += 1
@@ -94,14 +97,14 @@ state_eat_count :: proc(state: ^ParserState, count: int) -> (ok: bool) {
 }
 
 state_eof :: proc(state: ^ParserState) -> bool {
-    return state.cur >= len(state.content^)
+    return state.cur >= len(state.global_state.content)
 }
 
 state_char_at :: proc(state: ^ParserState, idx: int) -> rune {
-    assert(idx < len(state.content^)) // top level functions are expected to  check for this beforehand
+    assert(idx < len(state.global_state.content)) // top level functions are expected to  check for this beforehand
     // return utf8.rune_at_pos(state.content^, idx)
     // TODO: using rune_at_pos is indeed very slow, we'll have to use a rune index at some point
-    return cast(rune)state.content[idx]
+    return cast(rune)state.global_state.content[idx]
 }
 
 state_char :: proc(state: ^ParserState) -> rune {
@@ -112,7 +115,7 @@ state_string_at :: proc(state: ^ParserState, begin: int, end: int) -> string {
     if begin == end {
         return ""
     }
-    result, ok := strings.substring(state.content^, begin, end)
+    result, ok := strings.substring(state.global_state.content, begin, end)
     assert(ok)
     return result
 }
@@ -124,7 +127,7 @@ state_string :: proc(state: ^ParserState) -> string {
 @(private="file")
 find_line_start :: proc(state: ^ParserState) -> int {
     idx := state.cur - (state.loc.col - 1)
-    if state.content[idx] == '\n' {
+    if state.global_state.content[idx] == '\n' {
         idx += 1
     }
     return idx
@@ -132,10 +135,10 @@ find_line_start :: proc(state: ^ParserState) -> int {
 
 @(private="file")
 find_line_end :: proc(state: ^ParserState) -> int {
-    for i := state.cur; i < len(state.content^); i += 1 {
+    for i := state.cur; i < len(state.global_state.content); i += 1 {
         if state_char_at(state, i) == '\n' do return i
     }
-    return len(state.content^)
+    return len(state.global_state.content)
 }
 
 @(private="file")
