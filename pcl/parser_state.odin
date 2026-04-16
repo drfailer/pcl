@@ -27,35 +27,6 @@ ParserState :: struct {
     loc: Location,
 }
 
-state_enter_branch :: proc(state: ^ParserState) {
-    state.global_state.handle.branch_depth += 1
-}
-
-state_leave_branch :: proc(state: ^ParserState) {
-    state.global_state.handle.branch_depth -= 1
-}
-
-state_enter_lrec :: proc(state: ^ParserState, parser: ^LRecParser) {
-    parser.depth += 1
-    state.global_state.handle.lrec_depth += 1
-}
-
-state_leave_lrec :: proc(state: ^ParserState, parser: ^LRecParser) {
-    parser.depth -= 1
-    state.global_state.handle.lrec_depth -= 1
-}
-
-state_pre_exec :: proc(state: ^ParserState, pos, cur: int, loc: Location) {
-    state.pos = pos
-    state.cur = cur
-    state.loc = loc
-}
-
-state_post_exec :: proc(state: ^ParserState, loc: Location) {
-    state.pos = state.cur
-    state.loc = loc
-}
-
 state_create :: proc(global_state: ^ParserGlobalState) -> ParserState {
     return ParserState{
         global_state = global_state,
@@ -66,6 +37,32 @@ state_create :: proc(global_state: ^ParserGlobalState) -> ParserState {
 }
 
 state_destroy :: proc(state: ^ParserState) {
+}
+
+state_eof :: proc(state: ^ParserState) -> bool {
+    return state.cur >= len(state.global_state.content)
+}
+
+state_char :: proc(state: ^ParserState) -> rune {
+    return state_char_at(state, state.cur)
+}
+
+state_char_at :: proc(state: ^ParserState, idx: int) -> rune {
+    // TODO: using rune_at_pos is indeed very slow, we'll have to use a rune index at some point
+    return cast(rune)state.global_state.content[idx]
+}
+
+state_string :: proc(state: ^ParserState) -> string {
+    return state_string_at(state, state.pos, state.cur)
+}
+
+state_string_at :: proc(state: ^ParserState, begin: int, end: int) -> string {
+    if begin == end {
+        return ""
+    }
+    result, ok := strings.substring(state.global_state.content, begin, end)
+    assert(ok)
+    return result
 }
 
 state_eat :: proc(state: ^ParserState, count: int = 1) -> (ok: bool) {
@@ -97,30 +94,33 @@ state_eat_non_blank_unsafe :: proc(state: ^ParserState, count: int = 1) {
     state.cur += count
 }
 
-state_eof :: proc(state: ^ParserState) -> bool {
-    return state.cur >= len(state.global_state.content)
+state_pre_exec :: proc(state: ^ParserState, pos, cur: int, loc: Location) {
+    state.pos = pos
+    state.cur = cur
+    state.loc = loc
 }
 
-state_char_at :: proc(state: ^ParserState, idx: int) -> rune {
-    // TODO: using rune_at_pos is indeed very slow, we'll have to use a rune index at some point
-    return cast(rune)state.global_state.content[idx]
+state_post_exec :: proc(state: ^ParserState, loc: Location) {
+    state.pos = state.cur
+    state.loc = loc
 }
 
-state_char :: proc(state: ^ParserState) -> rune {
-    return state_char_at(state, state.cur)
+state_enter_branch :: proc(state: ^ParserState) {
+    state.global_state.handle.branch_depth += 1
 }
 
-state_string_at :: proc(state: ^ParserState, begin: int, end: int) -> string {
-    if begin == end {
-        return ""
-    }
-    result, ok := strings.substring(state.global_state.content, begin, end)
-    assert(ok)
-    return result
+state_leave_branch :: proc(state: ^ParserState) {
+    state.global_state.handle.branch_depth -= 1
 }
 
-state_string :: proc(state: ^ParserState) -> string {
-    return state_string_at(state, state.pos, state.cur)
+state_enter_lrec :: proc(state: ^ParserState, parser: ^LRecParser) {
+    parser.depth += 1
+    state.global_state.handle.lrec_depth += 1
+}
+
+state_leave_lrec :: proc(state: ^ParserState, parser: ^LRecParser) {
+    parser.depth -= 1
+    state.global_state.handle.lrec_depth -= 1
 }
 
 @(private="file")
