@@ -220,8 +220,8 @@ block_char :: proc(
             }
             if state_char(&sub_state) == '\\' {
                 escaped = true
-                state_eat_non_blank_unsafe(&sub_state)
-                state_eat_non_blank_unsafe(&sub_state)
+                state_eat_non_eol_unsafe(&sub_state)
+                state_eat_non_eol_unsafe(&sub_state)
                 continue
             }
             if state_eof(&sub_state) {
@@ -354,7 +354,7 @@ line_starting_with :: proc(
 
         // get the rest of the line
         for !state_eof(&sub_state) && state_char(&sub_state) != '\n' {
-            state_eat_non_blank_unsafe(&sub_state)
+            state_eat_non_eol_unsafe(&sub_state)
         }
         state_eat(&sub_state) // eat the '\n' (does nothing if eof)
 
@@ -404,7 +404,7 @@ separated_items :: proc(
             if state_eof(&sub_state) || state_char(&sub_state) != self.separator {
                 break
             }
-            state_eat_non_blank_unsafe(&sub_state)
+            state_eat_non_eol_unsafe(&sub_state)
             trailing = true
         }
 

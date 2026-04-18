@@ -99,8 +99,7 @@ state_eat_unsafe :: proc(state: ^ParserState, count: int = 1) {
     state.cur += 1
 }
 
-// TODO: rename into non_eol
-state_eat_non_blank_unsafe :: proc(state: ^ParserState, count: int = 1) {
+state_eat_non_eol_unsafe :: proc(state: ^ParserState, count: int = 1) {
     state.loc.row += count
     state.cur += count
 }
