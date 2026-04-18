@@ -5,11 +5,9 @@ import "core:fmt"
 import "core:os"
 
 PCLHandle :: struct {
-    // TODO: error_stack: [dynamic]ParserError
     branch_depth: u64,
     lrec_depth: u64,
     do_not_exec: bool,
-    error_allocator: mem.Allocator,
     // parser allocator
     parser_arena: mem.Dynamic_Arena,
     parser_allocator: mem.Allocator,
@@ -74,31 +72,22 @@ parse_string :: proc(
     str: string,
     user_data: rawptr = nil,
 ) -> (res: ExecResult, ok: bool) {
-    // set the user data
     handle.user_data = user_data
     handle.current_grammar = parser
-
-    // create the arena for the temporary allocations (error messages)
-    bytes: [4096]u8
-    error_arena: mem.Arena
-    mem.arena_init(&error_arena, bytes[:])
-    handle.error_allocator = mem.arena_allocator(&error_arena)
-    defer handle.error_allocator = mem.Allocator{}
-
-    // execute the given parser on the string and print error
     global_state := ParserGlobalState{
         content = str,
         handle = handle,
     }
     state := state_create(&global_state)
-    parse_result, err := parser_parse(&state, parser)
 
-    // make sure there are no trailing skipable runes
-    parser_skip(&state, SKIP)
+    // run the parser and skip trailing (the parse returns an error when the
+    // string was not consumed entirely)
+    parse_result, status := parser_parse(&state, parser)
+    parser_skip(&state, parser.skip)
 
     ok = true
-    if err != nil {
-        parser_error_report(err)
+    if status != .Success {
+        parser_error_report(&state, status)
         ok = false
     } else if !state_eof(&state) {
         fmt.printfln("syntax error: the parser did not consume all the string.")

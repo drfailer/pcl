@@ -19,7 +19,7 @@ ParseResult :: union {
     ExecResult,
 }
 
-ParseProc :: proc(self: ^Parser, state: ^ParserState) -> (res: ParseResult, err: ParserError)
+ParseProc :: proc(self: ^Parser, state: ^ParserState) -> (res: ParseResult, status: ParserStatus)
 
 ParserAllocator :: mem.Allocator
 
@@ -96,7 +96,7 @@ parser_print :: proc(parser: ^Parser) {
 
 // helper functions ////////////////////////////////////////////////////////////
 
-parser_parse :: proc(state: ^ParserState, parser: ^Parser) -> (res: ParseResult, err: ParserError) {
+parser_parse :: proc(state: ^ParserState, parser: ^Parser) -> (res: ParseResult, status: ParserStatus) {
     return parser->parse(state)
 }
 
@@ -113,57 +113,36 @@ parser_skip :: proc(state: ^ParserState, skip_ctx: SkipCtx) -> (pos: int, loc: L
 
 // errors //////////////////////////////////////////////////////////////////////
 
-SyntaxError :: struct {
-    state: ParserState,
-    message: string,
-    fatal: bool,
+ParserStatus :: enum {
+    Success,       // parser success
+    ParserFailure, // rule failed (recoverable)
+    SyntaxError,   // rule error (non recoverable: expect rule)
+    InternalError, // internal error (non recoverable)
 }
 
-InternalError :: struct {
-    message: string,
+parser_failure :: proc(state: ^ParserState, parser_name: string) -> ParserStatus {
+    state.global_state.error_state.parser_name = parser_name
+    state.global_state.error_state.location = state.loc
+    return .ParserFailure
 }
 
-ParserError :: union {
-    SyntaxError,
-    InternalError,
+parser_internal_error :: proc(state: ^ParserState, parser_name: string, message: string) -> ParserStatus {
+    state.global_state.error_state.parser_name = parser_name
+    state.global_state.error_state.message = message
+    return .InternalError
 }
 
-internal_error :: proc(state: ^ParserState, str: string, args: ..any) -> ParserError {
-    return InternalError{
-        fmt.aprintf(str, ..args, allocator = state.global_state.handle.error_allocator)
-    }
+parser_can_recover :: proc(status: ParserStatus) -> bool {
+    return status == .Success || status == .ParserFailure
 }
 
-syntax_error :: proc(state: ^ParserState, str: string, args: ..any, fatal := false) -> ParserError {
-    return SyntaxError{
-        state^,
-        fmt.aprintf(str, ..args, allocator = state.global_state.handle.error_allocator),
-        fatal,
-    }
-}
-
-parser_fatal_error :: proc(error: ^ParserError) {
-    #partial switch &e in error {
-    case (SyntaxError): e.fatal = true
-    }
-}
-
-parser_can_recover :: proc(error: ParserError) -> bool {
-    switch e in error {
-    case InternalError: return false
-    case SyntaxError: return e.fatal == false
-    }
-    return true
-}
-
-parser_error_report :: proc(error: ParserError) {
-    switch e in error {
-    case SyntaxError:
-        fmt.printfln("syntax error: {}", e.message)
-        state := e.state
-        state_print_context(&state)
-    case InternalError:
-        fmt.printfln("internal error: {}", e.message)
+parser_error_report :: proc(state: ^ParserState, status: ParserStatus) {
+    if status == .InternalError {
+        fmt.printfln("internal error: {}", state.global_state.error_state.message)
+    } else if status == .ParserFailure {
+        fmt.printfln("rule `{}' failed.", state.global_state.error_state.parser_name)
+        state.loc = state.global_state.error_state.location
+        state_print_context(state)
     }
 }
 

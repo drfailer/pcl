@@ -12,12 +12,20 @@ import "core:mem"
 Location :: struct {
     row: int,
     col: int,
+    line_start: int,
+}
+
+ParserErrorState :: struct {
+    parser_name: string,
+    location: Location,
+    message: string,
 }
 
 ParserGlobalState :: struct {
     file: string,
     content: string,
     handle: ^PCLHandle,
+    error_state: ParserErrorState,
 }
 
 ParserState :: struct {
@@ -32,7 +40,7 @@ state_create :: proc(global_state: ^ParserGlobalState) -> ParserState {
         global_state = global_state,
         pos = 0,
         cur = 0,
-        loc = Location{1, 1},
+        loc = Location{1, 1, 0},
     }
 }
 
@@ -57,7 +65,7 @@ state_string :: proc(state: ^ParserState) -> string {
 }
 
 state_string_at :: proc(state: ^ParserState, begin: int, end: int) -> string {
-    if begin == end {
+    if begin >= end {
         return ""
     }
     result, ok := strings.substring(state.global_state.content, begin, end)
@@ -71,6 +79,7 @@ state_eat :: proc(state: ^ParserState, count: int = 1) -> (ok: bool) {
         if state_char(state) == '\n' {
             state.loc.row += 1
             state.loc.col = 1
+            state.loc.line_start = state.cur + 1
         } else {
             state.loc.col += 1
         }
@@ -83,12 +92,14 @@ state_eat_unsafe :: proc(state: ^ParserState, count: int = 1) {
     if state_char(state) == '\n' {
         state.loc.row += 1
         state.loc.col = 1
+        state.loc.line_start = state.cur + 1
     } else {
         state.loc.col += 1
     }
     state.cur += 1
 }
 
+// TODO: rename into non_eol
 state_eat_non_blank_unsafe :: proc(state: ^ParserState, count: int = 1) {
     state.loc.row += count
     state.cur += count
@@ -124,20 +135,11 @@ state_leave_lrec :: proc(state: ^ParserState, parser: ^LRecParser) {
 }
 
 @(private="file")
-find_line_start :: proc(state: ^ParserState) -> int {
-    idx := state.cur - (state.loc.col - 1)
-    if state.global_state.content[idx] == '\n' {
-        idx += 1
+find_line_end :: proc(content: string, begin: int) -> int {
+    for i := begin; i < len(content); i += 1 {
+        if content[i] == '\n' do return i
     }
-    return idx
-}
-
-@(private="file")
-find_line_end :: proc(state: ^ParserState) -> int {
-    for i := state.cur; i < len(state.global_state.content); i += 1 {
-        if state_char_at(state, i) == '\n' do return i
-    }
-    return len(state.global_state.content)
+    return len(content)
 }
 
 @(private="file")
@@ -148,8 +150,8 @@ indent :: proc(n: int) {
 }
 
 state_print_context :: proc(state: ^ParserState) {
-    begin := find_line_start(state)
-    end := find_line_end(state)
+    begin := state.loc.line_start
+    end := find_line_end(state.global_state.content, begin)
     row_bytes: [10]u8
     sb := strings.builder_from_bytes(row_bytes[:])
 
