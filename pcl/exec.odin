@@ -326,7 +326,7 @@ result_from_value :: proc(data: ^ExecData, value: $T) -> ExecResult {
     } else when intrinsics.type_is_string(T) {
         return ExecResult{value, data.state.loc}
     } else {
-        copy := new(T, allocator = data.allocator) // TODO: this allocator is for the nodes, we need a temporary allocator here and we need to be able to free the data
+        copy := new(T, allocator = data.allocator)
         copy^ = value
         return ExecResult{cast(rawptr)copy, data.state.loc}
     }
