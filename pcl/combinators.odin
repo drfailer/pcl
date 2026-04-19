@@ -185,8 +185,8 @@ opt :: proc(
         sub_state := state^
         pos, loc := parser_skip(&sub_state, self.skip)
 
-        if res, status = parser_parse(&sub_state, self.parsers[0]); status != nil {
-            if !parser_can_recover(status) {
+        if res, status = parser_parse(&sub_state, self.parsers[0]); status != .Success {
+            if status != .ParserFailure {
                 return nil, status
             }
             res = ExecResult{"", state.loc}
@@ -228,7 +228,7 @@ or :: proc(
                 state_post_exec(state, tmp_sub_state.loc)
                 return res, .Success
             }
-            if !parser_can_recover(sub_status) {
+            if sub_status != .ParserFailure {
                 return nil, sub_status
             }
         }
@@ -280,7 +280,7 @@ star :: proc(
             tmp_sub_state := sub_state
             sub_res, sub_status := parser_parse(&tmp_sub_state, self.parsers[0])
             if sub_status != .Success {
-                if parser_can_recover(sub_status) {
+                if sub_status == .ParserFailure {
                     break
                 } else {
                     release_results(state, results[:])
@@ -316,7 +316,7 @@ plus :: proc(
             tmp_sub_state := sub_state
             sub_res, sub_status := parser_parse(&tmp_sub_state, self.parsers[0])
             if sub_status != .Success {
-                if parser_can_recover(sub_status) {
+                if sub_status == .ParserFailure {
                     break
                 } else {
                     release_results(state, results[:])
