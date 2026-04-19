@@ -92,44 +92,52 @@ exec_tree_node_exec :: proc(node: ^ExecTreeNode, exec_data: ^ExecData) -> ExecRe
     defer memory_pool_release(exec_data.node_pool, node)
 
     if len(node.childs) == 0 {
-        if node.ctx.exec == nil {
-            if .ListResult not_in node.flags {
-                return ExecResult{state_string(&node.ctx.state), loc}
-            } else {
-                empty_resutls := make([dynamic]ExecResult, allocator = exec_data.allocator)
-                return ExecResult{empty_resutls, loc}
-            }
-        }
-        exec_data.content = []ExecResult{ExecResult{state_string(&node.ctx.state), loc}}
-    } else {
-        childs_results := make([dynamic]ExecResult, allocator = exec_data.allocator)
+        return exec_tree_node_exec_no_child(node, exec_data)
+    }
 
-        for child in node.childs {
-            switch c in child {
-            case (^ExecTreeNode):
-                if child != nil {
-                    append(&childs_results, exec_tree_node_exec(c, exec_data))
-                }
-            case (ExecResult):
-                append(&childs_results, c)
-            }
+    if len(node.childs) == 1 && .ListResult not_in node.flags {
+        result := ExecResult{ loc = loc }
+        switch c in node.childs[0] {
+        case (^ExecTreeNode): result = exec_tree_node_exec(c, exec_data)
+        case (ExecResult): result = c
         }
-
         if node.ctx.exec == nil {
-            if .ListResult not_in node.flags && len(childs_results) == 1 {
-                result := childs_results[0]
-                delete(childs_results)
-                return result
-            }
-            return ExecResult{childs_results, loc}
-        } else {
-            exec_data.content = childs_results[:]
-            exec_data.state = &node.ctx.state
-            result := node.ctx.exec(exec_data)
-            delete(childs_results)
             return result
         }
+        exec_data.content = []ExecResult{result}
+        exec_data.state = &node.ctx.state
+        return node.ctx.exec(exec_data)
     }
+
+    childs_results := make([dynamic]ExecResult, len(node.childs), allocator = exec_data.allocator)
+
+    for child, idx in node.childs {
+        switch c in child {
+        case (^ExecTreeNode): childs_results[idx] = exec_tree_node_exec(c, exec_data)
+        case (ExecResult): childs_results[idx] = c
+        }
+    }
+
+    if node.ctx.exec == nil {
+        return ExecResult{childs_results, loc}
+    }
+    exec_data.content = childs_results[:]
+    exec_data.state = &node.ctx.state
+    result := node.ctx.exec(exec_data)
+    delete(childs_results) // FIXME: if the user keeps the data, we can't release this
+    return result
+}
+
+exec_tree_node_exec_no_child :: proc(node: ^ExecTreeNode, exec_data: ^ExecData) -> ExecResult {
+    loc := node.ctx.state.loc
+    if node.ctx.exec == nil {
+        if .ListResult not_in node.flags {
+            return ExecResult{state_string(&node.ctx.state), loc}
+        }
+        empty_resutls := make([dynamic]ExecResult, allocator = exec_data.allocator)
+        return ExecResult{empty_resutls, loc}
+    }
+    exec_data.content = []ExecResult{ExecResult{state_string(&node.ctx.state), loc}}
     exec_data.state = &node.ctx.state
     return node.ctx.exec(exec_data)
 }
