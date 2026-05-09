@@ -10,23 +10,27 @@ test_bracket :: proc(t: ^testing.T) {
     defer pcl.handle_destroy(pcl_handle)
     parser_allocator := pcl.handle_parser_allocator(pcl_handle)
     parser: ^pcl.Parser
+    result := ""
 
     {
         context.allocator = parser_allocator
         pcl.SKIP = pcl.skip_any_of(" \n")
-        parser = pcl.block('{', '}')
+        parser = pcl.block('{', '}', exec = proc(data: ^pcl.ExecData, content: string) {
+            result := pcl.user_data(data, ^string)
+            result^ = content
+        })
     }
 
     str := `
         {
             printf("}\n");
         }`
-    result, ok := pcl.parse_string(pcl_handle, parser, str)
+    ok := pcl.parse_string(pcl_handle, parser, str, &result)
 
     testing.expect(t, ok)
-    testing.expect(t, pcl.content(result) == `
+    testing.expect(t, result == `{
             printf("}\n");
-        `)
+        }`)
 }
 
 @(test)
@@ -35,18 +39,22 @@ test_quotes :: proc(t: ^testing.T) {
     defer pcl.handle_destroy(pcl_handle)
     parser_allocator := pcl.handle_parser_allocator(pcl_handle)
     parser: ^pcl.Parser
+    result := ""
 
     {
         context.allocator = parser_allocator
         pcl.SKIP = pcl.skip_any_of(" \n")
-        parser = pcl.block('"', '"')
+        parser = pcl.block('"', '"', exec = proc(data: ^pcl.ExecData, content: string) {
+            result := pcl.user_data(data, ^string)
+            result^ = content
+        })
     }
 
     str := `" printf(\"\"); "`
-    result, ok := pcl.parse_string(pcl_handle, parser, str)
+    ok := pcl.parse_string(pcl_handle, parser, str, &result)
 
     testing.expect(t, ok)
-    testing.expect(t, pcl.content(result) == ` printf(\"\"); `)
+    testing.expect(t, result == `" printf(\"\"); "`)
 }
 
 print_bracket :: proc() {
@@ -54,17 +62,21 @@ print_bracket :: proc() {
     defer pcl.handle_destroy(pcl_handle)
     parser_allocator := pcl.handle_parser_allocator(pcl_handle)
     parser: ^pcl.Parser
+    result := ""
 
     {
         context.allocator = parser_allocator
         pcl.SKIP = pcl.skip_any_of(" \n")
-        parser = pcl.block('{', '}')
+        parser = pcl.block('{', '}', exec = proc(data: ^pcl.ExecData, content: string) {
+            result := pcl.user_data(data, ^string)
+            result^ = content
+        })
     }
     str := `
         {
             printf("}\n");
         }`
-    result, ok := pcl.parse_string(pcl_handle, parser, str)
+    ok := pcl.parse_string(pcl_handle, parser, str, &result)
 
     fmt.printfln("result = {}", result)
 }
@@ -74,15 +86,19 @@ print_quotes :: proc() {
     defer pcl.handle_destroy(pcl_handle)
     parser_allocator := pcl.handle_parser_allocator(pcl_handle)
     parser: ^pcl.Parser
+    result := ""
 
     {
         context.allocator = parser_allocator
         pcl.SKIP = pcl.skip_any_of(" \n")
-        parser = pcl.block('"', '"')
+        parser = pcl.block('"', '"', exec = proc(data: ^pcl.ExecData, content: string) {
+            result := pcl.user_data(data, ^string)
+            result^ = content
+        })
     }
 
     str := `" printf(\"\"); "`
-    result, ok := pcl.parse_string(pcl_handle, parser, str)
+    ok := pcl.parse_string(pcl_handle, parser, str, &result)
 
     fmt.printfln("result = {}", result)
 }
