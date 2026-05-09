@@ -1,5 +1,5 @@
 #+feature using-stmt
-package json2
+package json
 
 /*
  * This second version of the json parser uses the same structure, but the exec
