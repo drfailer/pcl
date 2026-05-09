@@ -26,21 +26,31 @@ ParserGlobalState :: struct {
     content: string,
     handle: ^PCLHandle,
     error_state: ParserErrorState,
+    exec_list: [dynamic]ExecContext,
 }
 
-ParserState :: struct {
-    global_state: ^ParserGlobalState,
+// All the cursors of the state: this is the part of the state that is saved by
+// parsers which run sub-parsers that can fail (that's the reason why this
+// region is isolated).
+ParserStateCursors :: struct {
     pos: int,
     cur: int,
     loc: Location,
 }
 
+ParserState :: struct {
+    global_state: ^ParserGlobalState,
+    cursors: ParserStateCursors, // the cursors need to be saved and reset on sub-parser error
+}
+
 state_create :: proc(global_state: ^ParserGlobalState) -> ParserState {
     return ParserState{
         global_state = global_state,
-        pos = 0,
-        cur = 0,
-        loc = Location{1, 1, 0},
+        cursors = {
+            pos = 0,
+            cur = 0,
+            loc = Location{1, 1, 0},
+        },
     }
 }
 
@@ -48,11 +58,11 @@ state_destroy :: proc(state: ^ParserState) {
 }
 
 state_eof :: proc(state: ^ParserState) -> bool {
-    return state.cur >= len(state.global_state.content)
+    return state.cursors.cur >= len(state.global_state.content)
 }
 
 state_char :: proc(state: ^ParserState) -> rune {
-    return state_char_at(state, state.cur)
+    return state_char_at(state, state.cursors.cur)
 }
 
 state_char_at :: proc(state: ^ParserState, idx: int) -> rune {
@@ -61,7 +71,7 @@ state_char_at :: proc(state: ^ParserState, idx: int) -> rune {
 }
 
 state_string :: proc(state: ^ParserState) -> string {
-    return state_string_at(state, state.pos, state.cur)
+    return state_string_at(state, state.cursors.pos, state.cursors.cur)
 }
 
 state_string_at :: proc(state: ^ParserState, begin: int, end: int) -> string {
@@ -74,45 +84,34 @@ state_string_at :: proc(state: ^ParserState, begin: int, end: int) -> string {
 }
 
 state_eat :: proc(state: ^ParserState, count: int = 1) -> (ok: bool) {
-    if state.cur + count >= len(state.global_state.content) do return false
+    if state.cursors.cur + count >= len(state.global_state.content) do return false
     for _ in 0..<count {
         if state_char(state) == '\n' {
-            state.loc.row += 1
-            state.loc.col = 1
-            state.loc.line_start = state.cur + 1
+            state.cursors.loc.row += 1
+            state.cursors.loc.col = 1
+            state.cursors.loc.line_start = state.cursors.cur + 1
         } else {
-            state.loc.col += 1
+            state.cursors.loc.col += 1
         }
-        state.cur += 1
+        state.cursors.cur += 1
     }
     return true
 }
 
 state_eat_unsafe :: proc(state: ^ParserState, count: int = 1) {
     if state_char(state) == '\n' {
-        state.loc.row += 1
-        state.loc.col = 1
-        state.loc.line_start = state.cur + 1
+        state.cursors.loc.row += 1
+        state.cursors.loc.col = 1
+        state.cursors.loc.line_start = state.cursors.cur + 1
     } else {
-        state.loc.col += 1
+        state.cursors.loc.col += 1
     }
-    state.cur += 1
+    state.cursors.cur += 1
 }
 
 state_eat_non_eol_unsafe :: proc(state: ^ParserState, count: int = 1) {
-    state.loc.col += count
-    state.cur += count
-}
-
-state_pre_exec :: proc(state: ^ParserState, pos, cur: int, loc: Location) {
-    state.pos = pos
-    state.cur = cur
-    state.loc = loc
-}
-
-state_post_exec :: proc(state: ^ParserState, loc: Location) {
-    state.pos = state.cur
-    state.loc = loc
+    state.cursors.loc.col += count
+    state.cursors.cur += count
 }
 
 state_enter_branch :: proc(state: ^ParserState) {
@@ -149,18 +148,18 @@ indent :: proc(n: int) {
 }
 
 state_print_context :: proc(state: ^ParserState) {
-    begin := state.loc.line_start
+    begin := state.cursors.loc.line_start
     end := find_line_end(state.global_state.content, begin)
     row_bytes: [10]u8
     sb := strings.builder_from_bytes(row_bytes[:])
 
     // row to string
-    strings.write_int(&sb, state.loc.row)
+    strings.write_int(&sb, state.cursors.loc.row)
     row_str := strings.to_string(sb)
 
     fmt.printfln(" {} | {}", row_str, state_string_at(state, begin, end));
     indent(len(row_str))
     fmt.print("  | ")
-    indent(state.cur - begin)
+    indent(state.cursors.cur - begin)
     fmt.print("^\n")
 }
