@@ -221,6 +221,7 @@ seq :: proc(
         exec_len := parser_exec_list_len(state)
 
         for parser, parser_idx in self.parsers {
+            parser_skip(state, self.skip)
             if status = parser_parse(state, parser); status != .Success {
                 return parser_parse_fail(state, cursors, exec_len, status)
             }
@@ -241,6 +242,7 @@ star :: proc(
         exec_len := parser_exec_list_len(state)
 
         for !state_eof(state) {
+            parser_skip(state, self.skip)
             status = parser_parse(state, self.parsers[0])
             if status != .Success {
                 if status == .ParserFailure {
@@ -269,6 +271,7 @@ plus :: proc(
         exec_len := parser_exec_list_len(state)
 
         for !state_eof(state) {
+            parser_skip(state, self.skip)
             status := parser_parse(state, self.parsers[0])
             if status != .Success {
                 if status == .ParserFailure {
@@ -302,6 +305,7 @@ times :: proc(
         count := 0
 
         for !state_eof(state) && count < nb_times {
+            parser_skip(state, self.skip)
             parser_parse(state, self.parsers[0]) or_break
             count += 1
         }
