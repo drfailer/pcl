@@ -221,7 +221,6 @@ seq :: proc(
         exec_len := parser_exec_list_len(state)
 
         for parser, parser_idx in self.parsers {
-            parser_skip(state, self.skip)
             if status = parser_parse(state, parser); status != .Success {
                 return parser_parse_fail(state, cursors, exec_len, status)
             }
