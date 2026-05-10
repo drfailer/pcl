@@ -50,7 +50,7 @@ Node :: union {
 }
 
 ExecData :: struct {
-    node_stack: [dynamic]^Node,
+    result: ^Node,
     node_allocator: mem.Allocator,
 }
 
@@ -138,7 +138,8 @@ exec_value :: proc($type: typeid) -> pcl.ExecProc {
             assert(ok)
             node^ = cast(Value)value
         }
-        append(&ed.node_stack, node)
+        pcl.result_push(data, "node", node)
+        ed.result = node
     }
 }
 
@@ -147,14 +148,15 @@ exec_operator :: proc($op: Operator) -> pcl.ExecProc {
         // fmt.printfln("operator: {}", content)
         ed := pcl.user_data(data, ^ExecData)
         node := new(Node, ed.node_allocator)
-        rhs := pop(&ed.node_stack) // we pop rhs first
-        lhs := pop(&ed.node_stack)
+        rhs := pcl.result_pop(data, "node", ^Node).? or_else nil // we pop rhs first
+        lhs := pcl.result_pop(data, "node", ^Node).? or_else nil
         node^ = Operation{
             kind = op,
             lhs = lhs,
             rhs = rhs,
         }
-        append(&ed.node_stack, node)
+        pcl.result_push(data, "node", node)
+        ed.result = node
     }
 }
 
@@ -165,9 +167,10 @@ exec_function :: proc($id: FunctionId) -> pcl.ExecProc {
         node := new(Node, ed.node_allocator)
         node^ = Function{
             id = id,
-            expr = pop(&ed.node_stack),
+            expr = pcl.result_pop(data, "node", ^Node).? or_else nil,
         }
-        append(&ed.node_stack, node)
+        pcl.result_push(data, "node", node)
+        ed.result = node
     }
 }
 
@@ -176,9 +179,10 @@ exec_parent :: proc(data: ^pcl.ExecData, content: string) {
     ed := pcl.user_data(data, ^ExecData)
     node := new(Node, ed.node_allocator)
     node^ = Parent{
-        expr = pop(&ed.node_stack),
+        expr = pcl.result_pop(data, "node", ^Node).? or_else nil,
     }
-    append(&ed.node_stack, node)
+    pcl.result_push(data, "node", node)
+    ed.result = node
 }
 
 // <expr> := <expr> "+" <term> | <term>
@@ -232,10 +236,9 @@ print_tree_of_expression :: proc(str: string) {
     node_arena: mem.Arena
     mem.arena_init(&node_arena, node_arena_data[:])
     exec_data := ExecData{
-        node_stack = make([dynamic]^Node),
+        result = nil,
         node_allocator = mem.arena_allocator(&node_arena),
     }
-    defer delete(exec_data.node_stack)
 
     str := str
     ok := pcl.parse_string(pcl_handle, arithmetic_parser, str, &exec_data)
@@ -244,8 +247,8 @@ print_tree_of_expression :: proc(str: string) {
         return
     }
     fmt.printfln("tree of `{}`:", str)
-    assert(len(exec_data.node_stack) == 1)
-    node_print(exec_data.node_stack[0])
+    assert(exec_data.result != nil)
+    node_print(exec_data.result)
 }
 
 @(test)
@@ -259,25 +262,24 @@ test_numbers :: proc(t: ^testing.T) {
     node_arena: mem.Arena
     mem.arena_init(&node_arena, node_arena_data[:])
     exec_data := ExecData{
-        node_stack = make([dynamic]^Node),
+        result = nil,
         node_allocator = mem.arena_allocator(&node_arena),
     }
-    defer delete(exec_data.node_stack)
 
     str := "123"
     ok := pcl.parse_string(pcl_handle, arithmetic_parser, str, &exec_data)
     testing.expect(t, ok == true)
-    testing.expect(t, len(exec_data.node_stack) == 1)
-    testing.expect(t, node_eval(exec_data.node_stack[0]) == 123)
+    testing.expect(t, exec_data.result != nil)
+    testing.expect(t, node_eval(exec_data.result) == 123)
 
     mem.arena_free_all(&node_arena)
-    clear(&exec_data.node_stack)
+    exec_data.result = nil
 
     str = "3.14"
     ok = pcl.parse_string(pcl_handle, arithmetic_parser, str, &exec_data)
     testing.expect(t, ok == true)
-    testing.expect(t, len(exec_data.node_stack) == 1)
-    testing.expect(t, node_eval(exec_data.node_stack[0]) == 3.14)
+    testing.expect(t, exec_data.result != nil)
+    testing.expect(t, node_eval(exec_data.result) == 3.14)
 }
 
 @(test)
@@ -291,25 +293,24 @@ test_operation :: proc(t: ^testing.T) {
     node_arena: mem.Arena
     mem.arena_init(&node_arena, node_arena_data[:])
     exec_data := ExecData{
-        node_stack = make([dynamic]^Node),
+        result = nil,
         node_allocator = mem.arena_allocator(&node_arena),
     }
-    defer delete(exec_data.node_stack)
 
     str := "1 - 2 + 3"
     ok := pcl.parse_string(pcl_handle, arithmetic_parser, str, &exec_data)
     testing.expect(t, ok == true)
-    testing.expect(t, len(exec_data.node_stack) == 1)
-    testing.expect(t, node_eval(exec_data.node_stack[0]) == (1 - 2 + 3))
+    testing.expect(t, exec_data.result != nil)
+    testing.expect(t, node_eval(exec_data.result) == (1 - 2 + 3))
 
     mem.arena_free_all(&node_arena)
-    clear(&exec_data.node_stack)
+    exec_data.result = nil
 
     str = "(1 - 2) - 3*3 + 4/2"
     ok = pcl.parse_string(pcl_handle, arithmetic_parser, str, &exec_data)
     testing.expect(t, ok == true)
-    testing.expect(t, len(exec_data.node_stack) == 1)
-    testing.expect(t, node_eval(exec_data.node_stack[0]) == ((1 - 2) - 3*3 + 4/2))
+    testing.expect(t, exec_data.result != nil)
+    testing.expect(t, node_eval(exec_data.result) == ((1 - 2) - 3*3 + 4/2))
 }
 
 @(test)
@@ -323,25 +324,24 @@ test_functions :: proc(t: ^testing.T) {
     node_arena: mem.Arena
     mem.arena_init(&node_arena, node_arena_data[:])
     exec_data := ExecData{
-        node_stack = make([dynamic]^Node),
+        result = nil,
         node_allocator = mem.arena_allocator(&node_arena),
     }
-    defer delete(exec_data.node_stack)
 
     str := "sin(3.14)"
     ok := pcl.parse_string(pcl_handle, arithmetic_parser, str, &exec_data)
     testing.expect(t, ok == true)
-    testing.expect(t, len(exec_data.node_stack) == 1)
-    testing.expect(t, node_eval(exec_data.node_stack[0]) == math.sin_f32(3.14))
+    testing.expect(t, exec_data.result != nil)
+    testing.expect(t, node_eval(exec_data.result) == math.sin_f32(3.14))
 
     mem.arena_free_all(&node_arena)
-    clear(&exec_data.node_stack)
+    exec_data.result = nil
 
     str = "sin(1 - (2 + 3*12.4)) - 3*3 - cos(3*4) + 4/2 + (2 + 2)"
     ok = pcl.parse_string(pcl_handle, arithmetic_parser, str, &exec_data)
     testing.expect(t, ok == true)
-    testing.expect(t, len(exec_data.node_stack) == 1)
-    eval := node_eval(exec_data.node_stack[0])
+    testing.expect(t, exec_data.result != nil)
+    eval := node_eval(exec_data.result)
     expected := math.sin_f32(1 - (2 + 3*12.4)) - 3*3 - math.cos_f32(3*4) + 4/2 + (2 + 2)
     testing.expect(t, expected - 1e-5 <= eval && eval <= expected + 1e-5)
 }
