@@ -157,4 +157,9 @@ results_get :: proc(data: ^ExecData, key: string) -> []ParseResult {
 
 // Builtin exec proc helpers ///////////////////////////////////////////////////
 
-// TODO: collect_content_under_key proc($key: string)
+collect_content_under_key :: proc($key: string) -> ExecProc {
+    return proc(data: ^ExecData, content: string) {
+        result_push(data, content)
+    }
+}
+
