@@ -106,7 +106,6 @@ add_value :: proc(ed: ^ExecData, value: JSON_Value) {
 
 exec_number :: proc($type: typeid) -> pcl.ExecProc {
     return  proc(data: ^pcl.ExecData, content: string) {
-        // log.info("number:", content)
         ed := pcl.user_data(data, ^ExecData)
         value: JSON_Value
         when type == i32 {
@@ -121,44 +120,6 @@ exec_number :: proc($type: typeid) -> pcl.ExecProc {
         add_value(ed, value)
     }
 }
-
-// TODO: the new exec system makes execution non trivial for certain parsers
-// like the separated_items one.
-// Solutions:
-// - give the parent parser in the exec data (so we can detect if the parent is the list parser)
-// - add special flags
-// - it is also acceptable for this to be a user concern (user suppose the list in its code like here)
-//
-// I like the idea that this new system is has simple as just calling the exec
-// function on the right content; the user is responsible for collecting the
-// values or interpreting the content. We might have some builtins functions
-// (like the token rule) to collect the content of certain items and use a
-// map[rule_name]string (string or union like before) to allow accessing the
-// content on the user side.
-//
-// collecting the value in a map[string]queue(string):
-// - map key: rule name (or user defined)
-// - queue data: can either be strings (content pieces), or user defined data
-//               (exec execution part of the parser could be poly?).
-// - for lists we want a queue but for the combinators we may prefer a stack (cf: id issue in this file)
-//   - the separated_items rule should reorder the values in the array?
-//
-// API:
-// - Value :: union { string, rawptr, uint, T? }
-// - result_push("key", value)
-// - result_pop("key") -> Maybe(string) (maybe or empty string?)
-// - result_collect("key", allocator) -> [dynamic]string
-// - result_count("key") -> int
-//
-// QUESTION: do we only consider strings as values? (the user is entirely responsible to maintain its own data structure to accumulate the results)
-// THOUGHT: the user context should be a poly parameter
-//
-// parse_string(handle, parser, ctx, string) -> bool
-//
-// QUESTION: should the parse_string return a result?
-// - in that case the result should be poly as well
-//
-// REMARK: only having string as a result doesn't seem that usefull.
 
 // TODO: we should have a builtin function for this
 exec_id :: proc(data: ^pcl.ExecData, content: string) {
@@ -215,6 +176,7 @@ exec_object_end :: proc(data: ^pcl.ExecData, content: string) {
 
 number_grammar :: proc() -> ^pcl.Parser {
     using pcl
+    pcl.SKIP = pcl.NO_SKIP // these are tokens so we don't want to skip
     digits := plus(range('0', '9'), name = "digits")
     ints := combine(digits, name = "ints", exec = exec_number(i32))
     floats := combine(seq(digits, lit('.'), opt(digits)), name = "floats", exec = exec_number(f32))
