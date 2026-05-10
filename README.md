@@ -27,6 +27,8 @@ that it will work in every cases, but at least it is here :D.
 arithmetic_expr_grammar :: proc() -> ^pcl.Parser {
     using pcl
 
+    pcl.SKIP = pcl.NO_SKIP
+
     digits := plus(range('0', '9'), name = "digits")
     ints := combine(digits, name = "ints", exec = exec_value(i32))
     floats := combine(digits, '.', opt(digits), name = "floats", exec = exec_value(f32))
@@ -101,26 +103,47 @@ PCL goal is to be very simple, therefore, it does not provide any automatic AST
 builder of any kind. This is done firstly because it doesn't always make sense
 (you don't always wan't an AST), and it let users free of choosing the AST
 implementation if one is required (union/fat-struct, pointers/indices, ...).
+However, PCL provides an optional map of stack that can be used to store
+results. The stacks can store results three kinds:
+- `string`.
+- Pointer type (stored as a `rawptr`).
+- Register sized value (stored as a `uint`).
 
 PCL relies on `exec` callbacks that have the follwing signature:
 
 ```odin
-exec :: proc(data: ^pcl.ExecData, content: string)
+ExecProc :: proc(data: ^pcl.ExecData, content: string)
 ```
 
 - `data` is a handle that can be used the following ways:
   - `pcl.user_data(data, ^ContextType)`: get you context (pointer passed to the
     parse functions).
-  - `pcl.location(data)`: get the location of the content (`{row, col, file}`).
-- `content`: string parse by the rule.
+  - `pcl.content_location(data)`: get the location of the content (`{row, col, file}`).
+  - Results stacks:
+    - `pcl.result_push(data, key, value)`: push a result for a key.
+    - `pcl.result_pop(data, key, type)`: pop a result for a key and cast it
+      into `type` (default `string`, this function returns a `Maybe(type)`).
+    - `pcl.result_count(data, key)`: return the number of results of a key.
+    - `pcl.result_clear(data, key)`: clear results of a key.
+    - `pcl.result_get(data, key)`: get a result slice for a key.
+- `content`: string parsed by the rule.
 
 ### Example
 
 ```odin
 identifier_exec :: proc(data: ^pcl.ExecData, content: string) {
+    // using the user context
     ctx := plc.user_data(data, ^ParserContext)
     ctx.last_identifier = content
+    // using the result map
+    pcl.result_push(data, "identifier", content)
 }
+```
+
+To simply push a string to the results stack, PCL provides the following helper:
+
+```odin
+collect_content_under_key :: proc($key: string) -> ExecProc
 ```
 
 ## Extra parser syntax
@@ -134,7 +157,6 @@ function_definition := parser(
     name = "function_definition",
     rule = seq(type, identifier, argument_list, instruction_block),
     exec = proc(data: ^ExecData, content: string) {
-        ctx := pcl.user_data(data, ^MyContextType)
         // do stuff...
     },
 )
