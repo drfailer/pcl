@@ -54,8 +54,8 @@ declare_lrec :: proc(name: string = "lrec_parser") -> ^Parser {
         defer self.depth = depth_save
         // rhs
         rhs_save := self.rhs
-        self.rhs = -1
-        defer if rhs_save != -1 do self.rhs = rhs_save
+        self.rhs = {}
+        defer if rhs_save.exec != nil do self.rhs = rhs_save
         // run the parser
         return parser_parse(state, self.parsers[0])
     }
@@ -358,7 +358,7 @@ combine :: proc(
 LRecParser :: struct {
     using parser: Parser,
     depth: u64,
-    rhs: int,
+    rhs: ExecContext,
 }
 
 /*
@@ -401,27 +401,50 @@ lrec :: proc(
         defer state_leave_lrec(state, recursive_rule)
 
         if status = parser_parse(state, terminal_rule); status != .Success {
-            // FIXME: the cursors might be wrong here
+            // TODO: we never get here?
             return parser_parse_success(state, self.exec, cursors)
         }
+        term_ctx := state.global_state.exec_list[exec_len]
+        if recursive_rule.rhs.exec != nil {
+            rhs_ctx := recursive_rule.rhs
+            rhs_ctx.cursors.cur = state.cursors.cur
+            append(&state.global_state.exec_list, rhs_ctx)
+            term_ctx = rhs_ctx
+        }
 
-        // success if eof and no operator
+        // lrec supporst middle rules to help the writing of operators.
         parser_skip(state, self.skip)
         if state_eof(state) && len(middle_rules) == 0 {
             return parser_parse_success(state, self.exec, cursors)
         }
-
         if status = lrec_apply_middle_rules(self, state); status != .Success {
             return parser_parse_fail(state, cursors, exec_len, status)
         }
 
-        // FIXME: before we needed to udpate the rhs here, but now the order should be maintained naturaly
+        // We set the rhs to the current context but we do not add a new entry
+        // to the exec list right away. Instead, we wait for the recursive call
+        // to add the rhs context to the list after the parsing of the termial
+        // rule. This way, we maintain the execution order (both all the
+        // termial rules appear in the list before the execution of the current
+        // rule, ex: `1 + 2` -> [exec(1), exec(2), exec(+)]), and we can also
+        // advance the cursor.
+        recursive_rule.rhs = ExecContext{self.exec, state.cursors}
+        recursive_rule.rhs.cursors.pos = cursors.pos
 
         // Since the left recursion grammar is supposed to match empty (cf
         // upper comment), the recursive rule is expected to succeed.
         status = parser_parse(state, recursive_rule.parsers[0])
         assert(status == .Success)
-        return parser_parse_success(state, self.exec, cursors)
+
+        // we need to check if the rhs has been reset because of the recursion:
+        // when we go out of this function, we will go up the recusion stack,
+        // and we don't want to change the result again
+        if recursive_rule.rhs.exec != nil {
+            recursive_rule.rhs.cursors.cur = state.cursors.cur
+            append(&state.global_state.exec_list, recursive_rule.rhs)
+            recursive_rule.rhs = ExecContext{}
+        }
+        return .Success
     }
     return parser_create(name, parse, skip, exec, create_parser_array(context.allocator, skip, ..inputs))
 }
