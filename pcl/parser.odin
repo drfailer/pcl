@@ -2,6 +2,7 @@ package pcl
 
 import "core:strings"
 import "core:fmt"
+import "core:log"
 import "core:mem"
 
 // parser //////////////////////////////////////////////////////////////////////
@@ -14,12 +15,7 @@ Parser :: struct {
     parsers: [dynamic]^Parser,
 }
 
-ParseResult :: union {
-    ^ExecTreeNode,
-    ExecResult,
-}
-
-ParseProc :: proc(self: ^Parser, state: ^ParserState) -> (res: ParseResult, status: ParserStatus)
+ParseProc :: proc(self: ^Parser, state: ^ParserState) -> (status: ParserStatus)
 
 ParserAllocator :: mem.Allocator
 
@@ -96,19 +92,19 @@ parser_print :: proc(parser: ^Parser) {
 
 // helper functions ////////////////////////////////////////////////////////////
 
-parser_parse :: proc(state: ^ParserState, parser: ^Parser) -> (res: ParseResult, status: ParserStatus) {
+parser_parse :: proc(state: ^ParserState, parser: ^Parser) -> (status: ParserStatus) {
     return parser->parse(state)
 }
 
-parser_skip :: proc(state: ^ParserState, skip_ctx: SkipCtx) -> (pos: int, loc: Location) {
+parser_skip :: proc(state: ^ParserState, skip_ctx: SkipCtx) -> ParserStateCursors {
     if skip_ctx.skip == nil {
-        return state.pos, state.loc
+        return state.cursors
     }
     for !state_eof(state) {
         skip_ctx.skip(state, skip_ctx.data) or_break
     }
-    state.pos = state.cur
-    return state.pos, state.loc
+    state.cursors.pos = state.cursors.cur
+    return state.cursors
 }
 
 // errors //////////////////////////////////////////////////////////////////////
@@ -122,7 +118,7 @@ ParserStatus :: enum {
 
 parser_failure :: proc(state: ^ParserState, parser_name: string) -> ParserStatus {
     state.global_state.error_state.parser_name = parser_name
-    state.global_state.error_state.location = state.loc
+    state.global_state.error_state.location = state.cursors.loc
     return .ParserFailure
 }
 
@@ -141,54 +137,56 @@ parser_error_report :: proc(state: ^ParserState, status: ParserStatus) {
         fmt.printfln("internal error: {}", state.global_state.error_state.message)
     } else if status == .ParserFailure {
         fmt.printfln("rule `{}' failed.", state.global_state.error_state.parser_name)
-        state.loc = state.global_state.error_state.location
+        state.cursors.loc = state.global_state.error_state.location
         state_print_context(state)
     }
 }
 
 // exec tree functions /////////////////////////////////////////////////////////
 
-parser_exec_with_childs :: proc(
-    state: ^ParserState,
-    exec: ExecProc,
-    childs: [dynamic]ParseResult,
-    flags: bit_set[ExecFlag] = {},
-    loc := #caller_location,
-) -> ParseResult {
-    if state.global_state.handle.do_not_exec do return nil
-    pr: ParseResult
-    pr = memory_pool_allocate(&state.global_state.handle.exec_node_pool, loc)
-    pr.(^ExecTreeNode).ctx = ExecContext{exec, state^}
-    pr.(^ExecTreeNode).flags = flags
-    pr.(^ExecTreeNode).childs = childs
-    return pr
+// FIXME: the sequence parser processes the rules in order which means that we
+//        should execute the current rule after the sub rules and process the
+//        exec list in order. This means that the lrec parser will need to
+//        patch the exec list.
+
+parser_exec_list_len :: proc(state: ^ParserState) -> int {
+    if state.global_state.handle.do_not_exec do return -1
+    return len(state.global_state.exec_list)
 }
 
-parser_exec_with_child :: proc(
-    state: ^ParserState,
-    exec: ExecProc,
-    result: ParseResult,
-    flags: bit_set[ExecFlag] = {},
-    loc := #caller_location,
-) -> ParseResult {
-    if state.global_state.handle.do_not_exec do return nil
-    results := make([dynamic]ParseResult, allocator = state.global_state.handle.result_allocator)
-    append(&results, result)
-    return parser_exec_with_childs(state, exec, results, flags, loc = loc)
+parser_exec :: proc(state: ^ParserState, exec: ExecProc, cursors: ParserStateCursors, loc := #caller_location) {
+    if state.global_state.handle.do_not_exec || exec == nil do return
+    cursors := cursors
+    cursors.cur = state.cursors.cur
+    append(&state.global_state.exec_list, ExecContext{
+        exec = exec,
+        cursors = cursors,
+    })
 }
 
-parser_exec_no_child :: proc(
-    state: ^ParserState,
-    exec: ExecProc,
-    flags: bit_set[ExecFlag] = {},
-    loc := #caller_location,
-) -> ParseResult {
-    if state.global_state.handle.do_not_exec do return nil
-    return parser_exec_with_childs(state, exec, [dynamic]ParseResult{}, flags, loc = loc)
+parser_revert_exec :: proc(state: ^ParserState, index: int, loc := #caller_location) {
+    if state.global_state.handle.do_not_exec || index < 0 do return
+    resize(&state.global_state.exec_list, index)
 }
 
-parser_exec :: proc {
-    parser_exec_with_childs,
-    parser_exec_with_child,
-    parser_exec_no_child,
+parser_parse_fail :: proc(
+    state: ^ParserState,
+    cursors: ParserStateCursors,
+    exec_len: int,
+    status: ParserStatus,
+    loc := #caller_location,
+) -> ParserStatus {
+    state.cursors = cursors
+    parser_revert_exec(state, exec_len, loc)
+    return status
+}
+
+parser_parse_success :: proc(
+    state: ^ParserState,
+    exec: ExecProc,
+    cursors: ParserStateCursors,
+    loc := #caller_location,
+) -> ParserStatus {
+    parser_exec(state, exec, cursors)
+    return .Success
 }

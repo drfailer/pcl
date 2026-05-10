@@ -31,16 +31,6 @@ create_parser_array :: proc(allocator: mem.Allocator, skip: SkipCtx, inputs: ..C
     return array
 }
 
-release_result :: proc(state: ^ParserState, result: ParseResult) {
-    release_exec_tree(&state.global_state.handle.exec_node_pool, result)
-}
-
-release_results :: proc(state: ^ParserState, results: []ParseResult) {
-    #reverse for result in results {
-        release_exec_tree(&state.global_state.handle.exec_node_pool, result)
-    }
-}
-
 // combinators /////////////////////////////////////////////////////////////////
 
 declare :: proc(name: string = "parser") -> ^Parser {
@@ -48,7 +38,7 @@ declare :: proc(name: string = "parser") -> ^Parser {
     // of the parser is a special type (we can't just swap a normal parser with
     // a specialized one, otherwise it would result in a bad cast in the
     // underlying parse proc).
-    parse := proc(self: ^Parser, state: ^ParserState) -> (res: ParseResult, status: ParserStatus) {
+    parse := proc(self: ^Parser, state: ^ParserState) -> (status: ParserStatus) {
         assert(len(self.parsers) > 0 && self.parsers[0] != nil, "declared parsers must be defined.")
         return parser_parse(state, self.parsers[0])
     }
@@ -56,7 +46,7 @@ declare :: proc(name: string = "parser") -> ^Parser {
 }
 
 declare_lrec :: proc(name: string = "lrec_parser") -> ^Parser {
-    parse := proc(parser: ^Parser, state: ^ParserState) -> (res: ParseResult, status: ParserStatus) {
+    parse := proc(parser: ^Parser, state: ^ParserState) -> (status: ParserStatus) {
         self := cast(^LRecParser)parser
         assert(len(self.parsers) > 0 && self.parsers[0] != nil, "declared parsers must be defined.")
         // depth
@@ -64,11 +54,10 @@ declare_lrec :: proc(name: string = "lrec_parser") -> ^Parser {
         defer self.depth = depth_save
         // rhs
         rhs_save := self.rhs
-        self.rhs = nil
-        defer if rhs_save != nil do self.rhs = rhs_save
+        self.rhs = {}
+        defer if rhs_save.exec != nil do self.rhs = rhs_save
         // run the parser
-        res, status = parser_parse(state, self.parsers[0])
-        return res, status
+        return parser_parse(state, self.parsers[0])
     }
     return parser_create(LRecParser, name, parse, NO_SKIP, nil, []^Parser{nil})
 }
@@ -107,9 +96,9 @@ ExpectParser :: struct {
 }
 
 expect :: proc(parser: CombinatorInput, message :=  "") -> ^Parser {
-    parse := proc(parser: ^Parser, state: ^ParserState) -> (res: ParseResult, status: ParserStatus) {
+    parse := proc(parser: ^Parser, state: ^ParserState) -> (status: ParserStatus) {
         self := cast(^ExpectParser)parser
-        res, status = parser_parse(state, self.parsers[0])
+        status = parser_parse(state, self.parsers[0])
         if status == .ParserFailure {
             if len(self.message) > 0 {
                 fmt.printfln("syntax error: {}", self.message)
@@ -118,9 +107,9 @@ expect :: proc(parser: CombinatorInput, message :=  "") -> ^Parser {
                 fmt.printf("syntax error: ")
                 parser_error_report(state, status)
             }
-            return nil, .SyntaxError
+            return .SyntaxError
         }
-        return res, status
+        return status
     }
     result := parser_create(ExpectParser, "", parse, NO_SKIP, nil,
                             create_parser_array(context.allocator, NO_SKIP, parser))
@@ -129,8 +118,8 @@ expect :: proc(parser: CombinatorInput, message :=  "") -> ^Parser {
 }
 
 empty :: proc() -> ^Parser {
-    parse := proc(self: ^Parser, state: ^ParserState) -> (res: ParseResult, status: ParserStatus) {
-        return nil, .Success
+    parse := proc(self: ^Parser, state: ^ParserState) -> (status: ParserStatus) {
+        return .Success
     }
     return parser_create("emtpy", parse, SKIP, nil)
 }
@@ -141,17 +130,14 @@ single :: proc(
     exec: ExecProc = nil,
     name: string = "single",
 ) -> ^Parser {
-    parse := proc(self: ^Parser, state: ^ParserState) -> (res: ParseResult, status: ParserStatus) {
-        sub_state := state^
-        pos, loc := parser_skip(&sub_state, self.skip)
+    parse := proc(self: ^Parser, state: ^ParserState) -> (status: ParserStatus) {
+        cursors := parser_skip(state, self.skip)
+        exec_len := parser_exec_list_len(state)
 
-        if res, status = parser_parse(&sub_state, self.parsers[0]); status != .Success {
-            return nil, status
+        if status = parser_parse(state, self.parsers[0]); status != .Success {
+            return parser_parse_fail(state, cursors, exec_len, status)
         }
-        state_pre_exec(state, pos, sub_state.cur, loc)
-        res = parser_exec(state, self.exec, res)
-        state_post_exec(state, sub_state.loc)
-        return res, .Success
+        return parser_parse_success(state, self.exec, cursors)
     }
     return parser_create(name, parse, skip, exec, create_parser_array(context.allocator, skip, input))
 }
@@ -161,16 +147,15 @@ not :: proc(
     skip: SkipCtx = SKIP,
     name: string = "not",
 ) -> ^Parser {
-    parse := proc(self: ^Parser, state: ^ParserState) -> (res: ParseResult, status: ParserStatus) {
-        sub_state := state^
-        parser_skip(&sub_state, self.skip)
+    parse := proc(self: ^Parser, state: ^ParserState) -> (status: ParserStatus) {
+        cursors := parser_skip(state, self.skip)
         state.global_state.handle.do_not_exec = true
-        res, status = parser_parse(&sub_state, self.parsers[0])
+        status = parser_parse(state, self.parsers[0])
         state.global_state.handle.do_not_exec = false
         if status == .Success {
-            return nil, .ParserFailure // we don't register the location here
+            return parser_failure(state, self.name)
         }
-        return nil, .Success
+        return .Success
     }
     return parser_create(name, parse, skip, nil, create_parser_array(context.allocator, skip, input))
 }
@@ -181,21 +166,16 @@ opt :: proc(
     exec: ExecProc = nil,
     name: string = "opt",
 ) -> ^Parser {
-    parse := proc(self: ^Parser, state: ^ParserState) -> (res: ParseResult, status: ParserStatus) {
-        sub_state := state^
-        pos, loc := parser_skip(&sub_state, self.skip)
+    parse := proc(self: ^Parser, state: ^ParserState) -> (status: ParserStatus) {
+        cursors := parser_skip(state, self.skip)
+        exec_len := parser_exec_list_len(state)
 
-        if res, status = parser_parse(&sub_state, self.parsers[0]); status != .Success {
+        if status = parser_parse(state, self.parsers[0]); status != .Success {
             if status != .ParserFailure {
-                return nil, status
+                return parser_parse_fail(state, cursors, exec_len, status)
             }
-            res = ExecResult{"", state.loc}
-            return parser_exec_with_child(state, self.exec, res), .Success
         }
-        state_pre_exec(state, pos, sub_state.cur, loc)
-        res = parser_exec(state, self.exec, res)
-        state_post_exec(state, sub_state.loc)
-        return res, .Success
+        return parser_parse_success(state, self.exec, cursors)
     }
     return parser_create(name, parse, skip, exec, create_parser_array(context.allocator, skip, input))
 }
@@ -211,28 +191,21 @@ or :: proc(
     exec: ExecProc = nil,
     name: string = "or",
 ) -> ^Parser {
-    parse := proc(self: ^Parser, state: ^ParserState) -> (res: ParseResult, status: ParserStatus) {
+    parse := proc(self: ^Parser, state: ^ParserState) -> (status: ParserStatus) {
         state_enter_branch(state)
         defer state_leave_branch(state)
-        sub_state := state^
-        pos, loc := parser_skip(&sub_state, self.skip)
+        cursors := parser_skip(state, self.skip)
+        exec_len := parser_exec_list_len(state)
 
         for parser in self.parsers {
-            tmp_sub_state := sub_state
-            sub_res: ParseResult
-            sub_status: ParserStatus
-
-            if sub_res, sub_status = parser_parse(&tmp_sub_state, parser); sub_status == .Success {
-                state_pre_exec(state, pos, tmp_sub_state.cur, loc)
-                res = parser_exec(state, self.exec, sub_res)
-                state_post_exec(state, tmp_sub_state.loc)
-                return res, .Success
+            if status = parser_parse(state, parser); status == .Success {
+                return parser_parse_success(state, self.exec, cursors)
             }
-            if sub_status != .ParserFailure {
-                return nil, sub_status
+            if status != .ParserFailure {
+                return parser_parse_fail(state, cursors, exec_len, status)
             }
         }
-        return nil, parser_failure(state, self.name)
+        return parser_parse_fail(state, cursors, exec_len, parser_failure(state, self.name))
     }
     return parser_create(name, parse, skip, exec, create_parser_array(context.allocator, skip, ..inputs))
 }
@@ -243,24 +216,16 @@ seq :: proc(
     exec: ExecProc = nil,
     name: string = "seq",
 ) -> ^Parser {
-    parse := proc(self: ^Parser, state: ^ParserState) -> (res: ParseResult, status: ParserStatus) {
-        results := make([dynamic]ParseResult, allocator = state.global_state.handle.result_allocator)
-        sub_state := state^
-        sub_res: ParseResult
-        pos, loc := parser_skip(&sub_state, self.skip)
+    parse := proc(self: ^Parser, state: ^ParserState) -> (status: ParserStatus) {
+        cursors := parser_skip(state, self.skip)
+        exec_len := parser_exec_list_len(state)
 
         for parser, parser_idx in self.parsers {
-            parser_skip(&sub_state, self.skip)
-            if sub_res, status = parser_parse(&sub_state, parser); status != .Success {
-                release_results(state, results[:])
-                return nil, status
+            if status = parser_parse(state, parser); status != .Success {
+                return parser_parse_fail(state, cursors, exec_len, status)
             }
-            append(&results, sub_res)
         }
-        state_pre_exec(state, pos, sub_state.cur, loc)
-        res = parser_exec(state, self.exec, results)
-        state_post_exec(state, sub_state.loc)
-        return res, .Success
+        return parser_parse_success(state, self.exec, cursors)
     }
     return parser_create(name, parse, skip, exec, create_parser_array(context.allocator, skip, ..inputs))
 }
@@ -271,29 +236,21 @@ star :: proc(
     exec: ExecProc = nil,
     name: string = "star",
 ) -> ^Parser {
-    parse := proc(self: ^Parser, state: ^ParserState) -> (res: ParseResult, status: ParserStatus) {
-        results := make([dynamic]ParseResult, allocator = state.global_state.handle.result_allocator)
-        sub_state := state^
-        pos, loc := parser_skip(&sub_state, self.skip)
+    parse := proc(self: ^Parser, state: ^ParserState) -> (status: ParserStatus) {
+        cursors := parser_skip(state, self.skip)
+        exec_len := parser_exec_list_len(state)
 
-        for !state_eof(&sub_state) {
-            tmp_sub_state := sub_state
-            sub_res, sub_status := parser_parse(&tmp_sub_state, self.parsers[0])
-            if sub_status != .Success {
-                if sub_status == .ParserFailure {
+        for !state_eof(state) {
+            status = parser_parse(state, self.parsers[0])
+            if status != .Success {
+                if status == .ParserFailure {
                     break
                 } else {
-                    release_results(state, results[:])
-                    return nil, sub_status
+                    return parser_parse_fail(state, cursors, exec_len, status)
                 }
             }
-            append(&results, sub_res)
-            sub_state = tmp_sub_state
         }
-        state_pre_exec(state, pos, sub_state.cur, loc)
-        res = parser_exec(state, self.exec, results, flags = bit_set[ExecFlag]{.ListResult})
-        state_post_exec(state, sub_state.loc)
-        return res, .Success
+        return parser_parse_success(state, self.exec, cursors)
     }
     if len(inputs) > 1 {
         return parser_create(name, parse, skip, exec, []^Parser{seq(..inputs, skip = skip)})
@@ -307,32 +264,24 @@ plus :: proc(
     exec: ExecProc = nil,
     name: string = "plus",
 ) -> ^Parser {
-    parse := proc(self: ^Parser, state: ^ParserState) -> (res: ParseResult, status: ParserStatus) {
-        results := make([dynamic]ParseResult, allocator = state.global_state.handle.result_allocator)
-        sub_state := state^
-        pos, loc := parser_skip(&sub_state, self.skip)
+    parse := proc(self: ^Parser, state: ^ParserState) -> (status: ParserStatus) {
+        cursors := parser_skip(state, self.skip)
+        exec_len := parser_exec_list_len(state)
 
-        for !state_eof(&sub_state) {
-            tmp_sub_state := sub_state
-            sub_res, sub_status := parser_parse(&tmp_sub_state, self.parsers[0])
-            if sub_status != .Success {
-                if sub_status == .ParserFailure {
+        for !state_eof(state) {
+            status := parser_parse(state, self.parsers[0])
+            if status != .Success {
+                if status == .ParserFailure {
                     break
                 } else {
-                    release_results(state, results[:])
-                    return nil, sub_status
+                    return parser_parse_fail(state, cursors, exec_len, status)
                 }
             }
-            append(&results, sub_res)
-            sub_state = tmp_sub_state
         }
-        if sub_state.cur > pos {
-            state_pre_exec(state, pos, sub_state.cur, loc)
-            res = parser_exec(state, self.exec, results, flags = bit_set[ExecFlag]{.ListResult})
-            state_post_exec(state, sub_state.loc)
-            return res, .Success
+        if state.cursors.cur > cursors.pos {
+            return parser_parse_success(state, self.exec, cursors)
         }
-        return nil, parser_failure(state, self.name)
+        return parser_parse_fail(state, cursors, exec_len, parser_failure(state, self.name))
     }
     if len(inputs) > 1 {
         return parser_create(name, parse, skip, exec, []^Parser{seq(..inputs, skip = skip)})
@@ -347,25 +296,19 @@ times :: proc(
     exec: ExecProc = nil,
     name: string = "times",
 ) -> ^Parser {
-    parse := proc(self: ^Parser, state: ^ParserState) -> (res: ParseResult, status: ParserStatus) {
-        results := make([dynamic]ParseResult, allocator = state.global_state.handle.result_allocator)
-        sub_state := state^
-        pos, loc := parser_skip(&sub_state, self.skip)
+    parse := proc(self: ^Parser, state: ^ParserState) -> (status: ParserStatus) {
+        cursors := parser_skip(state, self.skip)
+        exec_len := parser_exec_list_len(state)
         count := 0
 
-        for !state_eof(&sub_state) && count < nb_times {
-            sub_res := parser_parse(&sub_state, self.parsers[0]) or_break
-            append(&results, sub_res)
+        for !state_eof(state) && count < nb_times {
+            parser_parse(state, self.parsers[0]) or_break
             count += 1
         }
         if count == nb_times {
-            state_pre_exec(state, pos, sub_state.cur, loc)
-            res = parser_exec(state, self.exec, results, flags = bit_set[ExecFlag]{.ListResult})
-            state_post_exec(state, sub_state.loc)
-            return res, .Success
+            return parser_parse_success(state, self.exec, cursors)
         }
-        release_results(state, results[:])
-        return nil, parser_failure(state, self.name)
+        return parser_parse_fail(state, cursors, exec_len, parser_failure(state, self.name))
     }
     if len(inputs) > 1 {
         return parser_create(name, parse, skip, exec, []^Parser{seq(..inputs, skip = skip)})
@@ -391,20 +334,17 @@ combine :: proc(
     exec: ExecProc = nil,
     name: string = "single",
 ) -> ^Parser {
-    parse := proc(self: ^Parser, state: ^ParserState) -> (res: ParseResult, status: ParserStatus) {
-        sub_state := state^
-        pos, loc := parser_skip(&sub_state, self.skip)
+    parse := proc(self: ^Parser, state: ^ParserState) -> (status: ParserStatus) {
+        cursors := parser_skip(state, self.skip)
+        exec_len := parser_exec_list_len(state)
 
         state.global_state.handle.do_not_exec = true
-        res, status = parser_parse(&sub_state, self.parsers[0])
+        status = parser_parse(state, self.parsers[0])
         state.global_state.handle.do_not_exec = false
         if status != .Success {
-            return nil, status
+            return parser_parse_fail(state, cursors, exec_len, status)
         }
-        state_pre_exec(state, pos, sub_state.cur, loc)
-        res = parser_exec(state, self.exec)
-        state_post_exec(state, sub_state.loc)
-        return res, .Success
+        return parser_parse_success(state, self.exec, cursors)
     }
     if len(inputs) > 1 {
         return parser_create(name, parse, skip, exec, []^Parser{seq(..inputs, skip = skip)})
@@ -417,7 +357,7 @@ combine :: proc(
 LRecParser :: struct {
     using parser: Parser,
     depth: u64,
-    rhs: ParseResult,
+    rhs: ExecContext,
 }
 
 /*
@@ -442,96 +382,80 @@ LRecParser :: struct {
  * found and only the exec function of <term> will be called.
  *
  */
+// FIXME: the exec list should be reordered!
 lrec :: proc(
     inputs: ..CombinatorInput, // TODO: force lrec parser as input
     skip: SkipCtx = SKIP,
     exec: ExecProc = nil,
     name: string = "lrec",
 ) -> ^Parser {
-    parse := proc(self: ^Parser, state: ^ParserState) -> (res: ParseResult, status: ParserStatus) {
+    parse := proc(self: ^Parser, state: ^ParserState) -> (status: ParserStatus) {
         terminal_rule := self.parsers[len(self.parsers) - 1]
         recursive_rule := cast(^LRecParser)self.parsers[0]
         middle_rules := self.parsers[1:len(self.parsers) - 1]
-        sub_state := state^
-        pos, loc := parser_skip(&sub_state, self.skip)
+        cursors := parser_skip(state, self.skip)
+        exec_len := parser_exec_list_len(state)
 
         state_enter_lrec(state, recursive_rule)
         defer state_leave_lrec(state, recursive_rule)
 
-        if res, status = parser_parse(&sub_state, terminal_rule); status != .Success {
-            return nil, status
+        if status = parser_parse(state, terminal_rule); status != .Success {
+            // TODO: we never get here?
+            return parser_parse_success(state, self.exec, cursors)
         }
-        term_res := res // we save the term rule for free
-        res = lrec_update_rhs(self, state, res, sub_state.cur)
-
-        // success if eof and no operator
-        parser_skip(&sub_state, self.skip)
-        if state_eof(&sub_state) && len(middle_rules) == 0 {
-            // if we return we have to update the state; we do not execute here
-            // (no need to: string empty, or no middel rules)
-            state_pre_exec(state, pos, sub_state.cur, loc)
-            state_post_exec(state, sub_state.loc)
-            return res, nil
+        term_ctx := state.global_state.exec_list[exec_len]
+        if recursive_rule.rhs.exec != nil {
+            rhs_ctx := recursive_rule.rhs
+            rhs_ctx.cursors.cur = state.cursors.cur
+            append(&state.global_state.exec_list, rhs_ctx)
+            term_ctx = rhs_ctx
         }
 
-        childs: [dynamic]ParseResult
-        if childs, status = lrec_apply_middle_rules(self, &sub_state); status != .Success {
-            if recursive_rule.rhs == nil {
-                release_result(state, term_res)
-            }
-            return nil, status
+        // lrec supporst middle rules to help the writing of operators.
+        parser_skip(state, self.skip)
+        if state_eof(state) && len(middle_rules) == 0 {
+            return parser_parse_success(state, self.exec, cursors)
         }
-        childs[0] = res
+        if status = lrec_apply_middle_rules(self, state); status != .Success {
+            return parser_parse_fail(state, cursors, exec_len, status)
+        }
 
-        state_pre_exec(state, pos, sub_state.cur, loc)
-        res = parser_exec(state, self.exec, childs)
-        state_post_exec(state, sub_state.loc)
-        res.(^ExecTreeNode).ctx.state.pos = childs[0].(^ExecTreeNode).ctx.state.pos
-        recursive_rule.rhs = res
+        // We set the rhs to the current context but we do not add a new entry
+        // to the exec list right away. Instead, we wait for the recursive call
+        // to add the rhs context to the list after the parsing of the termial
+        // rule. This way, we maintain the execution order (both all the
+        // termial rules appear in the list before the execution of the current
+        // rule, ex: `1 + 2` -> [exec(1), exec(2), exec(+)]), and we can also
+        // advance the cursor.
+        recursive_rule.rhs = ExecContext{self.exec, state.cursors}
+        recursive_rule.rhs.cursors.pos = cursors.pos
 
-        // apply recursive rule
-        if res, status = parser_parse(state, recursive_rule.parsers[0]); status != .Success {
-            // apparently, we never end up here
-            return nil, status
+        // Since the left recursion grammar is supposed to match empty (cf
+        // upper comment), the recursive rule is expected to succeed.
+        status = parser_parse(state, recursive_rule.parsers[0])
+        assert(status == .Success)
+
+        // we need to check if the rhs has been reset because of the recursion:
+        // when we go out of this function, we will go up the recusion stack,
+        // and we don't want to change the result again
+        if recursive_rule.rhs.exec != nil {
+            recursive_rule.rhs.cursors.cur = state.cursors.cur
+            append(&state.global_state.exec_list, recursive_rule.rhs)
+            recursive_rule.rhs = ExecContext{}
         }
-        // TODO: why?
-        if recursive_rule.rhs != nil && recursive_rule.rhs.(^ExecTreeNode) != res.(^ExecTreeNode) {
-            release_result(state, res)
-            res = recursive_rule.rhs
-            recursive_rule.rhs = nil
-        }
-        return res, .Success
+        return .Success
     }
     return parser_create(name, parse, skip, exec, create_parser_array(context.allocator, skip, ..inputs))
 }
 
 @(private="file")
-lrec_update_rhs :: proc(self: ^Parser, state: ^ParserState, rhs: ParseResult, cur: int) -> (lhs: ParseResult) {
-    recursive_rule := cast(^LRecParser)self.parsers[0]
-    if recursive_rule.rhs != nil {
-        rhs_idx := len(self.parsers) - 1
-        release_result(state, recursive_rule.rhs.(^ExecTreeNode).childs[rhs_idx])
-        recursive_rule.rhs.(^ExecTreeNode).childs[rhs_idx] = rhs
-        recursive_rule.rhs.(^ExecTreeNode).ctx.state.cur = cur
-        return recursive_rule.rhs
-    }
-    return rhs
-}
-
-@(private="file")
-lrec_apply_middle_rules :: proc(self: ^Parser, state: ^ParserState) -> (results: [dynamic]ParseResult, status: ParserStatus) {
+lrec_apply_middle_rules :: proc(self: ^Parser, state: ^ParserState) -> (status: ParserStatus) {
     middle_rules := self.parsers[1:len(self.parsers) - 1]
-    res: ParseResult
-
-    results = make([dynamic]ParseResult, len(self.parsers), allocator = state.global_state.handle.result_allocator)
     for parser, idx in middle_rules {
         parser_skip(state, self.skip)
-        if res, status = parser_parse(state, parser); status != .Success {
-            release_results(state, results[:])
-            delete(results)
-            return nil, status
+        if status = parser_parse(state, parser); status != .Success {
+            return status
         }
-        results[idx + 1] = res
     }
-    return results, .Success
+    return .Success
 }
