@@ -12,14 +12,7 @@ PCL has also been thought to be able to create pre-processing tools for which
 all the grammar does not need to be parsed. For this reason, the library allows
 creating custom parsers, and each parser has full access to state. This allows
 having full control in custom rules to handle special cases (and also write
-optimized sub-grammars from scratch if needed). For example, let's say that PCL
-is used to create a tool that requires to parse a part of the C syntax, but
-without parsing the content of the functions. PCL provides a parser called
-`block` which can be used for this purpose: `block('{', '}')` will skip the
-content of the function block, and treat it as a string which means that you
-don't have to provide any grammar for this. This is a feature that is not
-provided by most parsing libraries but that is still useful in a lot of
-situations.
+optimized sub-grammars from scratch if needed).
 
 ## Examples
 
@@ -28,12 +21,11 @@ situations.
 Here is an example of an arithmetic expression grammar (note that the `exec`
 functions implementations are not shown here). This grammar uses
 left-recursion: the current implementation is unoptimized and I don't guaranty
-that it will work in every cases, but it here :D.
+that it will work in every cases, but at least it is here :D.
 
 ```odin
-arithmetic_expr_grammar :: proc(allocator: pcl.ParserAllocator) -> ^pcl.Parser {
+arithmetic_expr_grammar :: proc() -> ^pcl.Parser {
     using pcl
-    context.allocator = allocator
 
     digits := plus(range('0', '9'), name = "digits")
     ints := combine(digits, name = "ints", exec = exec_value(i32))
@@ -55,6 +47,7 @@ arithmetic_expr_grammar :: proc(allocator: pcl.ParserAllocator) -> ^pcl.Parser {
     div := lrec(term, '/', factor, exec = exec_operator(.Div))
     define(term, or(mul, div, factor))
 
+    // lrec accepts "middle rules" that can optionaly be used to implement operators
     add := lrec(expr, '+', term, exec = exec_operator(.Add))
     sub := lrec(expr, '-', term, exec = exec_operator(.Sub))
     define(expr, or(add, sub, term))
@@ -67,14 +60,20 @@ Parse a test string:
 ```odin
 pcl_handle := pcl.handle_create()
 defer pcl.handle_destroy(pcl_handle)
-parser_allocator := pcl.handle_parser_allocator(handle) // pcl gives a parser allocator
-arithmetic_parser := arithmetic_grammar(parser_allocator)
+{
+    // the parser structure is non trivial, therefore, PCL consider that it
+    // belongs to the user. The handle can provide an optional allocator to
+    // avoid delete the grammar by hand.
+    context.allocator pcl.handle_parser_allocator(handle)
+    arithmetic_parser := arithmetic_grammar()
+}
 
 ctx: MyCustomContext
 
 // parse a string
-res, ok = pcl.parse_string(pcl_handle, parser, "sin(1 - (2 + 3*12.4)) - 3*3 - cos(3*4) + 4/2 + (2 + 2)", &ctx)
-node_print(pcl.content(res, ^Node)) // get the content as a `^Node`
+ok = pcl.parse_string(pcl_handle, parser, "sin(1 - (2 + 3*12.4)) - 3*3 - cos(3*4) + 4/2 + (2 + 2)", &ctx)
+assert(ok, "the parser failed :(")
+node_print(ctx.nodes[0])
 ```
 
 ## Parser allocation
@@ -98,46 +97,29 @@ parser_allocator := pcl.handle_parser_allocator(handle)
 
 ## The `exec` functions
 
-An `exec` function can be specified to every combinator to process the result.
-If no function is provided, the result of the rule will be a sub-tree created
-from the results of the sub-rules. When there are no sub-rules, the result is
-automatically set the string parsed by the rule. Note that if there is a single
-path leading to a leaf in a sub-tree, the tree is automatically flattened.
+PCL goal is to be very simple, therefore, it does not provide any automatic AST
+builder of any kind. This is done firstly because it doesn't always make sense
+(you don't always wan't an AST), and it let users free of choosing the AST
+implementation if one is required (union/fat-struct, pointers/indices, ...).
 
-The execution function must have the following signature:
+PCL relies on `exec` callbacks that have the follwing signature:
 
 ```odin
-exec :: proc(data: ^pcl.ExecData) -> pcl.ExecResult
+exec :: proc(data: ^pcl.ExecData, content: string)
 ```
 
-The data pointer taken as input can be used with different functions:
-- `user_data(data, type)`: retrieve the user context.
-- `content(data, type, idx..)`: retrieve a result at the give coordinate in the
-  sub tree, and cast it to the give type.
-- `contents(data, idx..)`: retrieve a list of sub-results at the given
-  coordinate in a sub-tree.
-- `result(data, value)`: create a result from a value.
+- `data` is a handle that can be used the following ways:
+  - `pcl.user_data(data, ^ContextType)`: get you context (pointer passed to the
+    parse functions).
+  - `pcl.location(data)`: get the location of the content (`{row, col, file}`).
+- `content`: string parse by the rule.
 
-Note that the `content` and `result` work with both values and pointers.
-However! Since the parser result type is not generic, the underlying
-implementation must use a `rawptr`, which means that their will be a hidden
-allocation in a dedicated arena in that case (the memory is handled by PCL). If
-you don't want to allocate any memory for your AST, you can use an accumulator
-in the your custom context (`user_data`).
-
-The `exec` function can also return `nil` if the parser produces no results.
-
-example:
+### Example
 
 ```odin
-exec_parent :: proc(data: ^pcl.ExecData) -> pcl.ExecResult {
-    ctx := pcl.user_data(data, ^MyCustomContext) // you can extract the user context from the data
-    left_parent := pcl.content(data, ^Node, 0),  // '('
-    expr := pcl.content(data, ^Node, 1)          // get the result of the expr rule
-    right_parent := pcl.content(data, ^Node, 2), // ')'
-    node := new(Node, ctx.allocator)             // in this case we use a pointer for the node
-    node^ = Parent{ expr = pcl.content(data, ^Node, 1) }
-    return pcl.result(data, node)
+identifier_exec :: proc(data: ^pcl.ExecData, content: string) {
+    ctx := plc.user_data(data, ^ParserContext)
+    ctx.last_identifier = content
 }
 ```
 
@@ -151,13 +133,9 @@ If you prefer defining the exec functions close to the rule, you can use the
 function_definition := parser(
     name = "function_definition",
     rule = seq(type, identifier, argument_list, instruction_block),
-    exec = proc(data: ^ExecData) -> ExecResult {
-        fmt.printfln("function found at {}:", content_location(data))
-        fmt.printfln("return type: {}", content(data, 0))
-        fmt.printfln("name: {}", content(data, 1))
-        fmt.printfln("arguments: {}", contents(data, 2)) // /!\ we get an array here so we use `contenS`, this may change in the future...
-        fmt.printfln("code: {}", content(data, 3))
-        return pcl.no_result(data)
+    exec = proc(data: ^ExecData, content: string) {
+        ctx := pcl.user_data(data, ^MyContextType)
+        // do stuff...
     },
 )
 ```
