@@ -176,10 +176,10 @@ exec_object_end :: proc(data: ^pcl.ExecData, content: string) {
 
 number_grammar :: proc() -> ^pcl.Parser {
     using pcl
-    pcl.SKIP = pcl.NO_SKIP // these are tokens so we don't want to skip
+    pcl.SKIP = pcl.NO_SKIP
     digits := plus(range('0', '9'), name = "digits")
-    ints := combine(digits, name = "ints", exec = exec_number(i32))
-    floats := combine(seq(digits, lit('.'), opt(digits)), name = "floats", exec = exec_number(f32))
+    ints := combine(digits, exec = exec_number(i32), name = "ints")
+    floats := combine(seq(digits, lit('.'), opt(digits)), exec = exec_number(f32), name = "floats")
     return or(floats, ints)
 }
 
